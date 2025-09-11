@@ -48,6 +48,7 @@ public class LinkController {
             return;
         }
 
+        
         System.out.println("Redirecting to: " + link.getOriginalUrl());
 
         // 클릭 로그 기록
@@ -57,8 +58,12 @@ public class LinkController {
         log.setReferrer(request.getHeader("Referer"));
         log.setUserAgent(request.getHeader("User-Agent"));
         clickLogService.saveClick(log);
-
+        
+        clickLogService.saveClickFromRequest(link, request);
+        
         response.sendRedirect(link.getOriginalUrl());
     }
+    
+    
 
 }

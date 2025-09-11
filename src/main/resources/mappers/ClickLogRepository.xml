@@ -1,56 +1,130 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<!DOCTYPE mapper
-        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="org.example.dashboard.repository.ClickLogRepository">
 
-    <!-- 클릭 로그 저장 -->
-    <insert id="insertClickLog" parameterType="org.example.dashboard.vo.ClickLog">
-        INSERT INTO click_log (
-            link_id,
-            clicked_at,
-            ip_hash,
-            user_agent,
-            referrer,
-            channel,
-            device_type,
-            browser,
-            os
-        ) VALUES (
-                     #{linkId},
-                     NOW(),
-                     #{ipHash},
-                     #{userAgent},
-                     #{referrer},
-                     #{channel},
-                     #{deviceType},
-                     #{browser},
-                     #{os}
-                 )
-    </insert>
+	<!-- 클릭 로그 저장 -->
+	<insert id="insertClickLog"
+		parameterType="org.example.dashboard.vo.ClickLog">
+		INSERT INTO click_log (
+		link_id,
+		clicked_at,
+		ip_hash,
+		user_agent,
+		referrer,
+		channel,
+		device_type,
+		browser,
+		os
+		) VALUES (
+		#{linkId},
+		NOW(),
+		#{ipHash},
+		#{userAgent},
+		#{referrer},
+		#{channel},
+		#{deviceType},
+		#{browser},
+		#{os}
+		)
+	</insert>
 
-    <!-- 특정 링크의 클릭 로그 조회 -->
-    <select id="selectByLinkId" parameterType="long" resultType="org.example.dashboard.vo.ClickLog">
-        SELECT
-            id,
-            link_id AS linkId,
-            clicked_at AS clickedAt,
-            ip_hash AS ipHash,
-            user_agent AS userAgent,
-            referrer,
-            channel,
-            device_type AS deviceType,
-            browser,
-            os
-        FROM click_log
-        WHERE link_id = #{linkId}
-        ORDER BY clicked_at DESC
-    </select>
+	<!-- 특정 링크의 클릭 로그 조회 -->
+	<select id="selectByLinkId" parameterType="long"
+		resultType="org.example.dashboard.vo.ClickLog">
+		SELECT
+		id,
+		link_id AS linkId,
+		clicked_at AS clickedAt,
+		ip_hash AS ipHash,
+		user_agent AS userAgent,
+		referrer,
+		channel,
+		device_type AS deviceType,
+		browser,
+		os
+		FROM click_log
+		WHERE link_id = #{linkId}
+		ORDER BY clicked_at DESC
+	</select>
 
-    <!-- 특정 링크의 클릭 수 -->
-    <select id="countByLinkId" parameterType="long" resultType="int">
-        SELECT COUNT(*) FROM click_log WHERE link_id = #{linkId}
-    </select>
+
+
+	<!-- 특정 링크의 클릭 수 -->
+	<select id="countByLinkId" parameterType="long" resultType="int">
+		SELECT COUNT(*) FROM click_log WHERE link_id = #{linkId}
+	</select>
+
+
+	<select id="last24hByHour" resultType="map">
+		SELECT DATE_FORMAT(clicked_at, '%Y-%m-%d %H:00:00') AS hour, COUNT(*) AS
+		cnt
+		FROM click_log
+		WHERE link_id = #{linkId}
+		AND clicked_at >= NOW() - INTERVAL 24 HOUR
+		GROUP BY DATE_FORMAT(clicked_at, '%Y-%m-%d %H:00:00')
+		ORDER BY hour
+	</select>
+
+	<select id="last7dByDate" resultType="map">
+		SELECT DATE(clicked_at) AS date, COUNT(*) AS cnt
+		FROM click_log
+		WHERE link_id = #{linkId}
+		AND clicked_at >= CURDATE() - INTERVAL 6 DAY
+		GROUP BY DATE(clicked_at)
+		ORDER BY date
+	</select>
+
+	<select id="byChannel" resultType="map">
+		SELECT COALESCE(NULLIF(channel,''),'UNKNOWN') AS channel, COUNT(*) AS
+		cnt
+		FROM click_log
+		WHERE link_id = #{linkId}
+		GROUP BY COALESCE(NULLIF(channel,''),'UNKNOWN')
+		ORDER BY cnt DESC
+	</select>
+
+	<select id="byDevice" resultType="map">
+		SELECT COALESCE(NULLIF(device_type,''),'OTHER') AS deviceType, COUNT(*)
+		AS cnt
+		FROM click_log
+		WHERE link_id = #{linkId}
+		GROUP BY COALESCE(NULLIF(device_type,''),'OTHER')
+		ORDER BY cnt DESC
+	</select>
+
+	<select id="topBrowsers" resultType="map">
+		SELECT COALESCE(NULLIF(browser,''),'UNKNOWN') AS browser, COUNT(*) AS
+		cnt
+		FROM click_log
+		WHERE link_id = #{linkId}
+		GROUP BY COALESCE(NULLIF(browser,''),'UNKNOWN')
+		ORDER BY cnt DESC
+		LIMIT #{limit}
+	</select>
+
+	<select id="topOS" resultType="map">
+		SELECT COALESCE(NULLIF(os,''),'UNKNOWN') AS os, COUNT(*) AS cnt
+		FROM click_log
+		WHERE link_id = #{linkId}
+		GROUP BY COALESCE(NULLIF(os,''),'UNKNOWN')
+		ORDER BY cnt DESC
+		LIMIT #{limit}
+	</select>
+
+	<select id="topReferrerHost" resultType="map">
+		SELECT
+		CASE
+		WHEN referrer IS NULL OR referrer = '' THEN 'DIRECT'
+		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(referrer, '://', -1), '/', 1)
+		END AS host,
+		COUNT(*) AS cnt
+		FROM click_log
+		WHERE link_id = #{linkId}
+		GROUP BY host
+		ORDER BY cnt DESC
+		LIMIT #{limit}
+	</select>
+
 
 </mapper>

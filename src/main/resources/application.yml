@@ -13,3 +13,5 @@ spring:
 mybatis:
   type-aliases-package: org.example.dashboard.vo
   mapper-locations: classpath:/mappers/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
