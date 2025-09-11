@@ -4,7 +4,7 @@
 
 <mapper namespace="org.example.dashboard.repository.LinkRepository">
 
-    <insert id="insertLink" parameterType="org.example.dashboard.vo.Link">
+    <insert id="insertLink" parameterType="org.example.dashboard.vo.Link" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO link (slug, original_url, expiration_date, active, created_at)
         VALUES (#{slug}, #{originalUrl}, #{expirationDate}, #{active}, NOW())
     </insert>
