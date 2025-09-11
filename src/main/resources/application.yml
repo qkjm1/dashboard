@@ -1,0 +1,15 @@
+server:
+  port: 8080
+spring:
+  mvc:
+    view:
+      prefix: /WEB-INF/jsp/
+      suffix: .jsp
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://dashboard.crg6u0s2maw3.ap-northeast-2.rds.amazonaws.com:3306/dashboard?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: admin
+    password: admin1234!
+mybatis:
+  type-aliases-package: org.example.dashboard.vo
+  mapper-locations: classpath:/mappers/**/*.xml

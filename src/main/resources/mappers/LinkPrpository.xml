@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.example.dashboard.repository.LinkRepository">
+
+    <insert id="insertLink" parameterType="org.example.dashboard.vo.Link">
+        INSERT INTO link (slug, original_url, expiration_date, active, created_at)
+        VALUES (#{slug}, #{originalUrl}, #{expirationDate}, #{active}, NOW())
+    </insert>
+
+    <select id="selectBySlug" parameterType="string" resultType="org.example.dashboard.vo.Link">
+        SELECT * FROM link WHERE slug = #{slug} AND active = true
+    </select>
+
+    <select id="countBySlug" parameterType="string" resultType="int">
+        SELECT COUNT(*) FROM link WHERE slug = #{slug}
+    </select>
+
+</mapper>
