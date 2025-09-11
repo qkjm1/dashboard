@@ -22,4 +22,5 @@ public class ClickLog {
     private String browser;
     private String userAgent;
     private LocalDateTime clickedAt;
+    
 }

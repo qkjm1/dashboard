@@ -48,6 +48,7 @@ public class LinkController {
             return;
         }
 
+        
         System.out.println("Redirecting to: " + link.getOriginalUrl());
 
         // 클릭 로그 기록
@@ -56,9 +57,13 @@ public class LinkController {
         log.setIpHash(Integer.toHexString(request.getRemoteAddr().hashCode()));
         log.setReferrer(request.getHeader("Referer"));
         log.setUserAgent(request.getHeader("User-Agent"));
-        clickLogService.saveClick(log);
-
+        System.out.println(log);
+        
+        clickLogService.saveClickFromRequest(link, request);
+        
         response.sendRedirect(link.getOriginalUrl());
     }
+    
+    
 
 }
