@@ -1,5 +1,7 @@
 package org.example.dashboard.service;
 
+import org.example.dashboard.dto.BrowserCountDTO;
+import org.example.dashboard.dto.LinkStatsDTO;
 import org.example.dashboard.repository.ClickLogRepository;
 import org.example.dashboard.vo.ClickLog;
 import org.example.dashboard.vo.Link; // 네 프로젝트에 맞춰 import
@@ -158,5 +160,36 @@ public class ClickLogService {
     }
     
     
+    public LinkStatsDTO buildStatsDTO(Long linkId) {
+        LinkStatsDTO dto = new LinkStatsDTO();
+        dto.setTotalClicks(clickLogRepository.countByLinkId(linkId));
 
+        // 필드 이름은 프론트에서 쓰기 좋은 alias로 XML에서 맞춰주었거나,
+        // Map 키를 그대로 사용(예: hour/cnt, date/cnt 등)
+        List<Map<String, Object>> h24 = clickLogRepository.last24hByHour(linkId);
+        List<Map<String, Object>> d7  = clickLogRepository.last7dByDate(linkId);
+        List<Map<String, Object>> topBrowsers = clickLogRepository.topBrowsers(linkId, 5);
+        List<Map<String, Object>> topOS       = clickLogRepository.topOS(linkId, 5);
+        List<Map<String, Object>> topRefs     = clickLogRepository.topReferrerHost(linkId, 10);
+
+        dto.setClicksLast24hByHour(h24);
+        dto.setClicksLast7dByDate(d7);
+        dto.setTopBrowsers(topBrowsers);
+        dto.setTopOS(topOS);
+
+        // host로 집계했다면 DTO의 키와 의미를 명시적으로 맞추자.
+        // (DTO 필드명이 topReferrers면 각 맵에 host 키가 들어있어도 OK)
+        dto.setTopReferrers(topRefs);
+        return dto;
+    }
+
+    // (선택) 최근 로그 조회 편의 메서드
+    public List<ClickLog> findByLinkId(Long linkId) {
+        return clickLogRepository.selectByLinkId(linkId);
+    }
+    
+    public List<BrowserCountDTO> getBrowserCountsBySlug(String slug) {
+        return clickLogRepository.browseCntBySlug(slug);
+    }
+    
 }

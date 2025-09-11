@@ -57,7 +57,7 @@ public class LinkController {
         log.setIpHash(Integer.toHexString(request.getRemoteAddr().hashCode()));
         log.setReferrer(request.getHeader("Referer"));
         log.setUserAgent(request.getHeader("User-Agent"));
-        clickLogService.saveClick(log);
+        System.out.println(log);
         
         clickLogService.saveClickFromRequest(link, request);
         

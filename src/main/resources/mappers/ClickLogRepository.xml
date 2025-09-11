@@ -49,7 +49,6 @@
 	</select>
 
 
-
 	<!-- 특정 링크의 클릭 수 -->
 	<select id="countByLinkId" parameterType="long" resultType="int">
 		SELECT COUNT(*) FROM click_log WHERE link_id = #{linkId}
@@ -124,6 +123,17 @@
 		GROUP BY host
 		ORDER BY cnt DESC
 		LIMIT #{limit}
+	</select>
+
+	<select id="browseCntBySlug"
+        parameterType="string"
+        resultType="org.example.dashboard.dto.BrowserCountDTO">
+		SELECT c.browser AS browser, COUNT(*) AS cnt
+		FROM link l
+		JOIN click_log c ON c.link_id = l.id
+		WHERE l.slug = #{slug}
+		GROUP BY c.browser
+		ORDER BY cnt DESC;
 	</select>
 
 
