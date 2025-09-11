@@ -1,7 +1,10 @@
 package org.example.dashboard.service;
 
 import org.example.dashboard.dto.BrowserCountDTO;
+import org.example.dashboard.dto.BurstStatsDTO;
 import org.example.dashboard.dto.LinkStatsDTO;
+import org.example.dashboard.dto.ReExposeStatsDTO;
+import org.example.dashboard.dto.TimeBucketCountDTO;
 import org.example.dashboard.repository.ClickLogRepository;
 import org.example.dashboard.vo.ClickLog;
 import org.example.dashboard.vo.Link; // 네 프로젝트에 맞춰 import
@@ -10,12 +13,18 @@ import org.springframework.stereotype.Service;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import nl.basjes.parse.useragent.UserAgent;
 import nl.basjes.parse.useragent.UserAgentAnalyzer;
+
+import java.sql.Timestamp;
+import java.time.*;
+import java.util.*;
+import java.util.stream.*;
 
 
 @Service
@@ -188,8 +197,85 @@ public class ClickLogService {
         return clickLogRepository.selectByLinkId(linkId);
     }
     
+    // 슬러그 기준으로 브라우저별 카운트
     public List<BrowserCountDTO> getBrowserCountsBySlug(String slug) {
         return clickLogRepository.browseCntBySlug(slug);
+    }
+    
+    // 시간별로 분포도 보는
+    public List<TimeBucketCountDTO> hourlyDistBySlug(String slug) {
+        return mapList(clickLogRepository.hourlyDistBySlug(slug));
+    }
+    public List<TimeBucketCountDTO> dowDistBySlug(String slug) {
+        return mapList(clickLogRepository.dowDistBySlug(slug));
+    }
+    public List<TimeBucketCountDTO> monthDistBySlug(String slug) {
+        return mapList(clickLogRepository.monthDistBySlug(slug));
+    }
+
+    // --- 버스트/하프라이프 ---
+    public BurstStatsDTO burstStats(String slug) {
+        List<TimeBucketCountDTO> raw = mapList(clickLogRepository.hoursSinceCreateBySlug(slug));
+        // 버킷 누락 채우기: 0..max
+        int max = raw.stream().mapToInt(r -> Integer.parseInt(r.getBucket())).max().orElse(0);
+        long[] byHour = new long[max + 1];
+        for (TimeBucketCountDTO r : raw) {
+            int h = Integer.parseInt(r.getBucket());
+            byHour[h] = r.getCnt();
+        }
+        List<Long> cumulative = new ArrayList<>(max + 1);
+        long running = 0, total = 0;
+        for (long v : byHour) { running += v; cumulative.add(running); total += v; }
+
+        Integer halflife = null;
+        if (total > 0) {
+            long half = (total + 1) / 2; // 반 이상 도달 첫 시점
+            for (int i = 0; i < cumulative.size(); i++) {
+                if (cumulative.get(i) >= half) { halflife = i; break; }
+            }
+        }
+
+        // DTO 구성
+        List<TimeBucketCountDTO> normalized = IntStream.range(0, byHour.length)
+            .mapToObj(i -> new TimeBucketCountDTO(String.valueOf(i), byHour[i]))
+            .collect(Collectors.toList());
+
+        BurstStatsDTO dto = new BurstStatsDTO();
+        dto.setTotalClicks(total);
+        dto.setHalflifeHours(halflife);
+        dto.setByHourSinceCreate(normalized);
+        dto.setCumulative(cumulative);
+        return dto;
+    }
+
+    // --- 재노출 전/후 시계열 ---
+    public ReExposeStatsDTO reExposeStats(String slug, LocalDateTime center, int windowHours) {
+        Timestamp centerTs = Timestamp.valueOf(center);
+
+        List<TimeBucketCountDTO> before = mapList(
+            clickLogRepository.seriesHourlyAroundMoment(slug, centerTs, windowHours, "before"));
+        List<TimeBucketCountDTO> after = mapList(
+            clickLogRepository.seriesHourlyAroundMoment(slug, centerTs, windowHours, "after"));
+
+        long beforeTotal = before.stream().mapToLong(TimeBucketCountDTO::getCnt).sum();
+        long afterTotal  = after.stream().mapToLong(TimeBucketCountDTO::getCnt).sum();
+
+        ReExposeStatsDTO dto = new ReExposeStatsDTO();
+        dto.setWindowHours(windowHours);
+        dto.setBeforeTotal(beforeTotal);
+        dto.setAfterTotal(afterTotal);
+        dto.setBeforeSeries(before);
+        dto.setAfterSeries(after);
+        return dto;
+    }
+
+    // 공통 변환
+    private List<TimeBucketCountDTO> mapList(List<Map<String, Object>> rows) {
+        return rows.stream().map(m -> {
+            String bucket = String.valueOf(m.get("bucket"));
+            long cnt = ((Number)m.get("cnt")).longValue();
+            return new TimeBucketCountDTO(bucket, cnt);
+        }).collect(Collectors.toList());
     }
     
 }

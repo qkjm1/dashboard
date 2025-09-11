@@ -126,14 +126,97 @@
 	</select>
 
 	<select id="browseCntBySlug"
-        parameterType="string"
-        resultType="org.example.dashboard.dto.BrowserCountDTO">
+		parameterType="string"
+		resultType="org.example.dashboard.dto.BrowserCountDTO">
 		SELECT c.browser AS browser, COUNT(*) AS cnt
 		FROM link l
 		JOIN click_log c ON c.link_id = l.id
 		WHERE l.slug = #{slug}
 		GROUP BY c.browser
 		ORDER BY cnt DESC;
+	</select>
+
+	<!-- 시간대 분포 (0~23시) -->
+	<select id="hourlyDistBySlug" parameterType="string"
+		resultType="map">
+		SELECT
+		HOUR(c.clicked_at) AS bucket,
+		COUNT(*) AS cnt
+		FROM link l
+		JOIN click_log c ON c.link_id = l.id
+		WHERE l.slug = #{slug}
+		GROUP BY bucket
+		ORDER BY bucket
+	</select>
+
+	<!-- 요일 분포 (1=일요일 ~ 7=토요일: MySQL DAYOFWEEK) -->
+	<select id="dowDistBySlug" parameterType="string"
+		resultType="map">
+		SELECT
+		DAYOFWEEK(c.clicked_at) AS bucket,
+		COUNT(*) AS cnt
+		FROM link l
+		JOIN click_log c ON c.link_id = l.id
+		WHERE l.slug = #{slug}
+		GROUP BY bucket
+		ORDER BY bucket
+	</select>
+
+	<!-- 월별 분포 (YYYY-MM) -->
+	<select id="monthDistBySlug" parameterType="string"
+		resultType="map">
+		SELECT
+		DATE_FORMAT(c.clicked_at, '%Y-%m') AS bucket,
+		COUNT(*) AS cnt
+		FROM link l
+		JOIN click_log c ON c.link_id = l.id
+		WHERE l.slug = #{slug}
+		GROUP BY bucket
+		ORDER BY bucket
+	</select>
+
+	<!-- 링크 생성 이후 시간 경과(시간단위) 별 카운트: 버스트/하프라이프 계산용 -->
+	<select id="hoursSinceCreateBySlug" parameterType="string"
+		resultType="map">
+		SELECT
+		TIMESTAMPDIFF(HOUR, l.created_at, c.clicked_at) AS bucket,
+		COUNT(*) AS cnt
+		FROM link l
+		JOIN click_log c ON c.link_id = l.id
+		WHERE l.slug = #{slug}
+		AND c.clicked_at >= l.created_at
+		GROUP BY bucket
+		HAVING bucket >= 0
+		ORDER BY bucket
+	</select>
+
+	<!-- 기준시각 전/후 N시간 윈도우 비교용 시계열 (분해능: 1시간) -->
+	<select id="seriesHourlyAroundMoment"
+		parameterType="map"
+		resultType="map">
+  <![CDATA[
+    /* params: slug, centerTs (DATETIME), windowHours (INT), side ('before'|'after') */
+    SELECT
+      DATE_FORMAT(c.clicked_at, '%Y-%m-%d %H:00:00') AS tsHour,
+      COUNT(*) AS cnt
+    FROM link l
+    JOIN click_log c ON c.link_id = l.id
+    WHERE l.slug = #{slug}
+      AND c.clicked_at >=
+        CASE
+          WHEN #{side} = 'before'
+            THEN DATE_SUB(#{centerTs}, INTERVAL #{windowHours} HOUR)
+          ELSE #{centerTs}
+        END
+      AND c.clicked_at <
+        CASE
+          WHEN #{side} = 'before'
+            THEN #{centerTs}
+          ELSE DATE_ADD(#{centerTs}, INTERVAL #{windowHours} HOUR)
+        END
+    GROUP BY tsHour
+    ORDER BY tsHour
+  ]]>
 	</select>
 
 

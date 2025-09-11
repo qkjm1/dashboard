@@ -4,8 +4,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 import org.example.dashboard.dto.BrowserCountDTO;
+import org.example.dashboard.dto.BurstStatsDTO;
 import org.example.dashboard.dto.LinkFullInfoDTO;
 import org.example.dashboard.dto.LinkStatsDTO;
+import org.example.dashboard.dto.ReExposeStatsDTO;
 import org.example.dashboard.dto.UrlMetaDTO;
 import org.example.dashboard.service.ClickLogService;
 import org.example.dashboard.service.LinkService;
@@ -16,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -102,5 +105,37 @@ public class APIController {
 		}
 		return clickLogService.getBrowserCountsBySlug(slug);
 	}
+	
+	
+	// 1) 시간대/요일/월별 분포
+    @GetMapping("/links/{slug}/time-distribution")
+    public Object timeDistribution(
+            @PathVariable String slug,
+            @RequestParam(defaultValue = "hour") String granularity // hour|dow|month
+    ) {
+        switch (granularity) {
+            case "hour":  return clickLogService.hourlyDistBySlug(slug);
+            case "dow":   return clickLogService.dowDistBySlug(slug);
+            case "month": return clickLogService.monthDistBySlug(slug);
+            default: throw new IllegalArgumentException("granularity must be hour|dow|month");
+        }
+    }
+
+    // 2) 버스트/하프라이프
+    @GetMapping("/links/{slug}/burst")
+    public BurstStatsDTO burst(@PathVariable String slug) {
+        return clickLogService.burstStats(slug);
+    }
+
+    // 3) 재노출 전/후 24시간 비교
+    @GetMapping("/links/{slug}/reexpose")
+    public ReExposeStatsDTO reexpose(
+            @PathVariable String slug,
+            @RequestParam String at, // ISO-8601, e.g. 2025-09-11T14:00:00
+            @RequestParam(defaultValue = "24") int windowHours
+    ) {
+        LocalDateTime center = LocalDateTime.parse(at);
+        return clickLogService.reExposeStats(slug, center, windowHours);
+    }
 
 }

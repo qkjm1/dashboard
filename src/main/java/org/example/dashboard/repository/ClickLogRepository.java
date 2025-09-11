@@ -33,4 +33,17 @@ public interface ClickLogRepository {
 	List<Map<String, Object>> topOS(@Param("linkId") Long linkId, @Param("limit") int limit);
 
 	List<Map<String, Object>> topReferrerHost(@Param("linkId") Long linkId, @Param("limit") int limit);
+
+	List<Map<String, Object>> hourlyDistBySlug(@Param("slug") String slug);
+
+	List<Map<String, Object>> dowDistBySlug(@Param("slug") String slug);
+
+	List<Map<String, Object>> monthDistBySlug(@Param("slug") String slug);
+
+	List<Map<String, Object>> hoursSinceCreateBySlug(@Param("slug") String slug);
+
+	List<Map<String, Object>> seriesHourlyAroundMoment(@Param("slug") String slug,
+			@Param("centerTs") java.sql.Timestamp centerTs, @Param("windowHours") int windowHours,
+			@Param("side") String side // "before" | "after"
+	);
 }
