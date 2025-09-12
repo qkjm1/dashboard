@@ -38,7 +38,6 @@ public class ClickLogService {
 	@Autowired
 	private GeoIPResolver geoIPResolver;
 
-
 	private static final UserAgentAnalyzer UAA = UserAgentAnalyzer.newBuilder().withField(UserAgent.AGENT_NAME) // 브라우저
 			.withField(UserAgent.OPERATING_SYSTEM_NAME) // OS
 			.withField(UserAgent.DEVICE_CLASS) // 기기 분류
@@ -119,7 +118,7 @@ public class ClickLogService {
 		stats.put("topReferrers", clickLogRepository.topReferrerHost(linkId, 10));
 		return stats;
 	}
-	
+
 	private String extractClientIp(HttpServletRequest req) {
 		// XFF 우선 추출
 		String xff = req.getHeader("X-Forwarded-For");
@@ -132,23 +131,21 @@ public class ClickLogService {
 		return req.getRemoteAddr();
 	}
 
-	public void saveClickFromRequest(Link link, HttpServletRequest req) {		
+	public void saveClickWithChannel(Link link, HttpServletRequest req, String channelOverride) {
 		String clientIp = extractClientIp(req);
-		
-	    String cfCountry = req.getHeader("CF-IPCountry");
-	    String country = (cfCountry != null && !cfCountry.isBlank())
-	            ? cfCountry.toUpperCase()
-	            : geoIPResolver.countryCode(clientIp);
-	    
-	 // ↓ 기본값 보강
-	    if (country == null || country.isBlank()) {
-	        country = "UN";
-	    }
-	    
-	    
+
+		String cfCountry = req.getHeader("CF-IPCountry");
+		String country = (cfCountry != null && !cfCountry.isBlank()) ? cfCountry.toUpperCase()
+				: geoIPResolver.countryCode(clientIp);
+
+		// ↓ 기본값 보강
+		if (country == null || country.isBlank()) {
+			country = "UN";
+		}
+
 		ClickLog log = new ClickLog();
 		log.setLinkId(link.getId());
-		log.setCountryCode(country); 
+		log.setCountryCode(country);
 
 		// IP 해시 (간단 버전 유지)
 		String ip = req.getRemoteAddr();
@@ -162,6 +159,65 @@ public class ClickLogService {
 			host = (ref != null) ? new URI(ref).getHost() : null;
 		} catch (Exception ignored) {
 		}
+		if (channelOverride != null && !channelOverride.isBlank()) {
+			log.setChannel(channelOverride);
+		} else {
+			log.setChannel(toChannel(host, ref)); // DIRECT/UNKNOWN 포함
+		}
+
+		// 2) UA → browser/os/deviceType (YAUAA)
+		String uaString = req.getHeader("User-Agent");
+		log.setUserAgent(uaString);
+
+		if (uaString != null && !uaString.isBlank()) {
+			UserAgent ua = UAA.parse(uaString);
+
+			String browser = nz(ua.getValue(UserAgent.AGENT_NAME), "UNKNOWN");
+			String os = nz(ua.getValue(UserAgent.OPERATING_SYSTEM_NAME), "UNKNOWN");
+			String deviceC = nz(ua.getValue(UserAgent.DEVICE_CLASS), "Unknown");
+
+			log.setBrowser(browser);
+			log.setOs(os);
+			log.setDeviceType(mapDeviceClass(deviceC)); // "MOBILE" | "TABLET" | "DESKTOP" | "OTHER"
+		} else {
+			log.setBrowser("UNKNOWN");
+			log.setOs("UNKNOWN");
+			log.setDeviceType("OTHER");
+		}
+
+		clickLogRepository.insertClickLog(log);
+
+	}
+
+	public void saveClickFromRequest(Link link, HttpServletRequest req) {
+		String clientIp = extractClientIp(req);
+
+		String cfCountry = req.getHeader("CF-IPCountry");
+		String country = (cfCountry != null && !cfCountry.isBlank()) ? cfCountry.toUpperCase()
+				: geoIPResolver.countryCode(clientIp);
+
+		// ↓ 기본값 보강
+		if (country == null || country.isBlank()) {
+			country = "UN";
+		}
+
+		ClickLog log = new ClickLog();
+		log.setLinkId(link.getId());
+		log.setCountryCode(country);
+
+		// IP 해시 (간단 버전 유지)
+		String ip = req.getRemoteAddr();
+		log.setIpHash(ip == null ? "UNKNOWN" : Integer.toHexString(ip.hashCode()));
+
+		// 1) Referrer & Channel
+		String ref = req.getHeader("Referer");
+		log.setReferrer(ref);
+		String host = null;
+		try {
+			host = (ref != null) ? new URI(ref).getHost() : null;
+		} catch (Exception ignored) {
+		}
+
 		log.setChannel(toChannel(host, ref)); // DIRECT/UNKNOWN 포함
 
 		// 2) UA → browser/os/deviceType (YAUAA)
@@ -183,8 +239,6 @@ public class ClickLogService {
 			log.setOs("UNKNOWN");
 			log.setDeviceType("OTHER");
 		}
-		
-		
 
 		clickLogRepository.insertClickLog(log);
 
@@ -354,23 +408,37 @@ public class ClickLogService {
 	public List<ReferrerCountDTO> topReferrersByTargetUrl(String targetUrl, int limit) {
 		return clickLogRepository.topReferrersByTargetUrl(targetUrl, limit);
 	}
-	
+
 	public List<CountryCountDTO> countryDistBySlug(String slug, LocalDateTime start, LocalDateTime end) {
-        return clickLogRepository.countryDistBySlug(slug, start, end);
-    }
+		return clickLogRepository.countryDistBySlug(slug, start, end);
+	}
 
-    public UniqueStatsDTO uniqueStatsBySlug(String slug, LocalDateTime start, LocalDateTime end, int windowMinutes) {
-        long total = clickLogRepository.totalClicksBySlug(slug, start, end);
-        long uniq  = clickLogRepository.uniqueApproxBySlug(slug, start, end);
-        long win   = clickLogRepository.uniqueWindowedBySlug(slug, start, end, windowMinutes);
+	public UniqueStatsDTO uniqueStatsBySlug(String slug, LocalDateTime start, LocalDateTime end, int windowMinutes) {
+		long total = clickLogRepository.totalClicksBySlug(slug, start, end);
+		long uniq = clickLogRepository.uniqueApproxBySlug(slug, start, end);
+		long win = clickLogRepository.uniqueWindowedBySlug(slug, start, end, windowMinutes);
 
-        UniqueStatsDTO dto = new UniqueStatsDTO();
-        dto.setTotalClicks(total);
-        dto.setUniqueApprox(uniq);
-        dto.setUniqueWindowed(win);
-        dto.setWindowMinutes(windowMinutes);
-        dto.setDuplicateRatio(total > 0 ? (double)(total - uniq) / total : 0.0);
-        return dto;
-    }
+		UniqueStatsDTO dto = new UniqueStatsDTO();
+		dto.setTotalClicks(total);
+		dto.setUniqueApprox(uniq);
+		dto.setUniqueWindowed(win);
+		dto.setWindowMinutes(windowMinutes);
+		dto.setDuplicateRatio(total > 0 ? (double) (total - uniq) / total : 0.0);
+		return dto;
+	}
+
+	// qr 조회용 메서드
+	public List<ReferrerCountDTO> qrVsLinkBySlug(String slug, LocalDateTime start, LocalDateTime end) {
+		return clickLogRepository.qrVsLinkBySlug(slug, start, end);
+	}
+
+	public List<ReferrerCountDTO> qrMediumTopBySlug(String slug, LocalDateTime start, LocalDateTime end, int limit) {
+		return clickLogRepository.qrMediumBySlug(slug, start, end, limit);
+	}
+
+	public List<TimeBucketCountDTO> scanDistribution(String slug, String source, String granularity,
+			LocalDateTime start, LocalDateTime end) {
+		return clickLogRepository.timeDistributionFiltered(slug, source, granularity, start, end);
+	}
 
 }
