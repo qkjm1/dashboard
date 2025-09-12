@@ -139,6 +139,13 @@ public class ClickLogService {
 	    String country = (cfCountry != null && !cfCountry.isBlank())
 	            ? cfCountry.toUpperCase()
 	            : geoIPResolver.countryCode(clientIp);
+	    
+	 // ↓ 기본값 보강
+	    if (country == null || country.isBlank()) {
+	        country = "UN";
+	    }
+	    
+	    
 		ClickLog log = new ClickLog();
 		log.setLinkId(link.getId());
 		log.setCountryCode(country); 
@@ -176,6 +183,8 @@ public class ClickLogService {
 			log.setOs("UNKNOWN");
 			log.setDeviceType("OTHER");
 		}
+		
+		
 
 		clickLogRepository.insertClickLog(log);
 

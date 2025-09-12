@@ -15,7 +15,8 @@
 		channel,
 		device_type,
 		browser,
-		os
+		os,
+		country_code
 		) VALUES (
 		#{linkId},
 		NOW(),
@@ -25,7 +26,8 @@
 		#{channel},
 		#{deviceType},
 		#{browser},
-		#{os}
+		#{os},
+		#{countryCode}
 		)
 	</insert>
 
