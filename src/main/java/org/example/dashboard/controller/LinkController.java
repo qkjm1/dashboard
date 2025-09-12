@@ -65,5 +65,29 @@ public class LinkController {
     }
     
     
+    @GetMapping("/q/{slug}")
+    public void redirectQr(@PathVariable String slug,
+                           @RequestParam(required = false) String m,   // medium: poster/bizcard/banner...
+                           @RequestParam(required = false) String loc, // 위치 식별자(선택)
+                           HttpServletRequest request,
+                           HttpServletResponse response) throws IOException {
+        Link link = linkService.getLink(slug);
+        if (link == null || !Boolean.TRUE.equals(link.getActive())) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+
+        // channel = "QR:<m>[:<loc>]" 규칙
+        String medium = (m == null || m.isBlank()) ? "generic" : m.trim();
+        String channel = (loc == null || loc.isBlank())
+                ? "QR:" + medium
+                : "QR:" + medium + ":" + loc.trim();
+
+        clickLogService.saveClickWithChannel(link, request, channel);
+        response.sendRedirect(link.getOriginalUrl());
+    }
+    
+    
+    
 
 }

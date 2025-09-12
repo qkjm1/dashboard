@@ -282,6 +282,7 @@
 		<if test="end != null"> AND c.clicked_at &lt; #{end} </if>
 	</sql>
 
+
 	<!-- 국가 분포 -->
 	<select id="countryDistBySlug"
 		resultType="org.example.dashboard.dto.CountryCountDTO"> SELECT
@@ -314,6 +315,53 @@
 		c.clicked_at ) &gt;= #{winMin} THEN 1 ELSE 0 END AS session_start FROM
 		click_log c JOIN link l ON l.id = c.link_id WHERE l.slug = #{slug} <include
 			refid="TIME_RANGE" /> ) x WHERE session_start = 1 </select>
+
+
+	<!-- QR vs LINK 집계 (slug 기준) -->
+	<select id="qrVsLinkBySlug"
+		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT CASE
+		WHEN COALESCE(c.channel,'') LIKE 'QR:%' THEN 'QR' ELSE 'LINK' END AS
+		`key`, COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id = c.link_id
+		WHERE l.slug = #{slug} <include refid="TIME_RANGE" /> GROUP BY `key`
+		ORDER BY `key` </select>
+
+	<!-- QR 매체(중분류) TOP N: channel = 'QR:<medium>[:...]' -->
+	<select id="qrMediumBySlug"
+		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT --
+		'QR:poster:gateA' -> 'poster' SUBSTRING_INDEX(SUBSTRING_INDEX(c.channel,
+		':', 2), ':', -1) AS `key`, COUNT(*) AS cnt FROM click_log c JOIN link l
+		ON l.id = c.link_id WHERE l.slug = #{slug} AND COALESCE(c.channel,'')
+		LIKE 'QR:%' <include refid="TIME_RANGE" /> GROUP BY `key` ORDER BY cnt
+		DESC LIMIT #{limit} </select>
+
+
+	<!-- source 필터 동적 WHERE -->
+	<sql id="SOURCE_FILTER">
+		<if test="source == 'qr'">
+			AND COALESCE(c.channel,'') LIKE 'QR:%'
+		</if>
+		<if test="source == 'link'">
+			AND (c.channel IS NULL OR c.channel NOT LIKE 'QR:%')
+		</if>
+	</sql>
+
+	<!-- 시간 분포 -->
+	<select id="timeDistributionFiltered"
+		resultType="org.example.dashboard.dto.TimeBucketCountDTO"> SELECT <choose>
+			<when test="granularity == 'hour'">
+				HOUR(c.clicked_at) AS bucket
+			</when>
+			<when test="granularity == 'dow'">
+				DAYOFWEEK(c.clicked_at) AS bucket
+			</when>
+			<otherwise>
+				HOUR(c.clicked_at) AS bucket
+			</otherwise>
+		</choose>,
+		COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id = c.link_id WHERE
+		l.slug = #{slug} <include refid="SOURCE_FILTER" />
+  <include
+			refid="TIME_RANGE" /> GROUP BY bucket ORDER BY bucket </select>
 
 
 </mapper>
