@@ -219,5 +219,59 @@
   ]]>
 	</select>
 
+	<!-- 공통: referrer 호스트 추출 (생성 컬럼 없는 경우용) -->
+	<sql id="REF_HOST_EXPR">
+		LOWER(
+		REPLACE(
+		REPLACE(
+		SUBSTRING_INDEX(SUBSTRING_INDEX(COALESCE(c.referrer,''), '/', 3), '/',
+		-1),
+		'www.', ''
+		),
+		'm.', ''
+		)
+		)
+	</sql>
+
+	<!-- 리퍼러 호스트 TOP N (slug 기준) -->
+	<select id="topReferrersBySlug"
+		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT <choose>
+			<when test="_databaseId == 'mysql' or _databaseId == 'mariadb'">
+		COALESCE(c.referrer_host, <include refid="REF_HOST_EXPR" />) </when>
+			<otherwise>
+				<include refid="REF_HOST_EXPR" />
+			</otherwise>
+		</choose>
+		AS `key`, COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id =
+		c.link_id WHERE l.slug = #{slug} GROUP BY `key` ORDER BY cnt DESC LIMIT
+		#{limit} </select>
+
+	<!-- 채널 TOP N (slug 기준) -->
+	<select id="topChannelsBySlug"
+		resultType="org.example.dashboard.dto.ReferrerCountDTO">
+		SELECT
+		COALESCE(NULLIF(c.channel,''), 'UNKNOWN') AS `key`,
+		COUNT(*) AS cnt
+		FROM click_log c
+		JOIN link l ON l.id = c.link_id
+		WHERE l.slug = #{slug}
+		GROUP BY `key`
+		ORDER BY cnt DESC
+		LIMIT #{limit}
+	</select>
+
+	<!-- 동일 타깃 URL 전체 기준 리퍼러 TOP N -->
+	<select id="topReferrersByTargetUrl"
+		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT <choose>
+			<when test="_databaseId == 'mysql' or _databaseId == 'mariadb'">
+		COALESCE(c.referrer_host, <include refid="REF_HOST_EXPR" />) </when>
+			<otherwise>
+				<include refid="REF_HOST_EXPR" />
+			</otherwise>
+		</choose>
+		AS `key`, COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id =
+		c.link_id WHERE l.original_url = #{targetUrl} GROUP BY `key` ORDER BY
+		cnt DESC LIMIT #{limit} </select>
+
 
 </mapper>

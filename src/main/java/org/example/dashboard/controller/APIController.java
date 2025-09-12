@@ -8,6 +8,7 @@ import org.example.dashboard.dto.BurstStatsDTO;
 import org.example.dashboard.dto.LinkFullInfoDTO;
 import org.example.dashboard.dto.LinkStatsDTO;
 import org.example.dashboard.dto.ReExposeStatsDTO;
+import org.example.dashboard.dto.ReferrerCountDTO;
 import org.example.dashboard.dto.UrlMetaDTO;
 import org.example.dashboard.service.ClickLogService;
 import org.example.dashboard.service.LinkService;
@@ -107,7 +108,12 @@ public class APIController {
 	}
 	
 	
-	// 1) 시간대/요일/월별 분포
+	/* 시간대/요일/월별 분포 
+	* /links/{slug}/time-distribution?granularity={hour|dow|month} < 세개중 하나 파라미터로 넘겨야함
+	* dow (1=일요일, 2=월요일, 3=화요일 -- 7=토요) 요별
+	* hour (1~24) 시별
+	* month (yyyy-mm) 월별
+	*/
     @GetMapping("/links/{slug}/time-distribution")
     public Object timeDistribution(
             @PathVariable String slug,
@@ -121,13 +127,21 @@ public class APIController {
         }
     }
 
-    // 2) 버스트/하프라이프
+    /* 생성시점이후 클릭 누적
+     * bucket이 생성시 1시간을 0부터 셈 (json 명)
+    * byHourSinceCreate: 생성 후 0시간, 1시간…의 클릭 수
+    * cumulative: 같은 인덱스 기준 누적 클릭 수
+    * halflifeHours: 누적이 전체의 50%를 넘어선 최초 시간    
+	*/
     @GetMapping("/links/{slug}/burst")
     public BurstStatsDTO burst(@PathVariable String slug) {
         return clickLogService.burstStats(slug);
     }
 
-    // 3) 재노출 전/후 24시간 비교
+    /* 재노출 전/후 24시간 비교
+     * 
+     * todo 만기기간 정해야
+     */
     @GetMapping("/links/{slug}/reexpose")
     public ReExposeStatsDTO reexpose(
             @PathVariable String slug,
@@ -136,6 +150,45 @@ public class APIController {
     ) {
         LocalDateTime center = LocalDateTime.parse(at);
         return clickLogService.reExposeStats(slug, center, windowHours);
+    }
+    
+    
+    /*
+     * slug 기준으로 링크가 게시된 사이트의 출저
+     * limit 고정 = 5
+     */
+    @GetMapping("/links/{slug}/referrers")
+    public List<ReferrerCountDTO> topReferrers(@PathVariable String slug,
+                                               @RequestParam(defaultValue = "5") int limit) {
+        Link link = linkService.getLink(slug);
+        if (link == null || !Boolean.TRUE.equals(link.getActive())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "링크가 없거나 비활성");
+        }
+        return clickLogService.topReferrersBySlug(slug, limit);
+    }
+
+    /*
+     * slug 기준으로 링크가 게시된 사이트의 채널 이름 (네이버/구글/카카오 등)
+     * limit 고정 = 5
+     */
+    @GetMapping("/links/{slug}/channels")
+    public List<ReferrerCountDTO> topChannels(@PathVariable String slug,
+                                              @RequestParam(defaultValue = "5") int limit) {
+        Link link = linkService.getLink(slug);
+        if (link == null || !Boolean.TRUE.equals(link.getActive())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "링크가 없거나 비활성");
+        }
+        return clickLogService.topChannelsBySlug(slug, limit);
+    }
+
+    /*
+     * 동일 url 기준으로 게시된 referrers별로 가져오기
+     * limit 고정 = 5
+     */
+    @GetMapping("/targets/referrers")
+    public List<ReferrerCountDTO> topReferrersForTarget(@RequestParam String url,
+                                                        @RequestParam(defaultValue = "5") int limit) {
+        return clickLogService.topReferrersByTargetUrl(url, limit);
     }
 
 }
