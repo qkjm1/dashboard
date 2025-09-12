@@ -5,16 +5,19 @@ import lombok.RequiredArgsConstructor;
 
 import org.example.dashboard.dto.BrowserCountDTO;
 import org.example.dashboard.dto.BurstStatsDTO;
+import org.example.dashboard.dto.CountryCountDTO;
 import org.example.dashboard.dto.LinkFullInfoDTO;
 import org.example.dashboard.dto.LinkStatsDTO;
 import org.example.dashboard.dto.ReExposeStatsDTO;
 import org.example.dashboard.dto.ReferrerCountDTO;
+import org.example.dashboard.dto.UniqueStatsDTO;
 import org.example.dashboard.dto.UrlMetaDTO;
 import org.example.dashboard.service.ClickLogService;
 import org.example.dashboard.service.LinkService;
 import org.example.dashboard.vo.ClickLog;
 import org.example.dashboard.vo.Link;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -32,6 +35,18 @@ public class APIController {
 
 	@Autowired
 	private ClickLogService clickLogService;
+	
+	/*
+	 * 국가 api 보조용
+	 */
+    private Link requireActive(String slug) {
+        Link link = linkService.getLink(slug);
+        if (link == null || !Boolean.TRUE.equals(link.getActive())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "링크가 없거나 비활성");
+        }
+        return link;
+    }
+
 
 	/*
 	 * slug 기준 lick 테이블 전부
@@ -189,6 +204,33 @@ public class APIController {
     public List<ReferrerCountDTO> topReferrersForTarget(@RequestParam String url,
                                                         @RequestParam(defaultValue = "5") int limit) {
         return clickLogService.topReferrersByTargetUrl(url, limit);
+    }
+    
+    /*
+     * 국가분포
+     */
+    @GetMapping("/links/{slug}/geo/countries")
+    public List<CountryCountDTO> countryDist(
+            @PathVariable String slug,
+            @RequestParam(required = false) LocalDateTime start,
+            @RequestParam(required = false) LocalDateTime end
+    ) {
+        requireActive(slug);
+        return clickLogService.countryDistBySlug(slug, start, end);
+    }
+
+    /*
+     * 유니크; 같은 ip 중복클릭확인
+     */
+    @GetMapping("/links/{slug}/unique-stats")
+    public UniqueStatsDTO uniqueStats(
+            @PathVariable String slug,
+            @RequestParam(defaultValue = "10") int windowMinutes,
+            @RequestParam(required = false) LocalDateTime start,
+            @RequestParam(required = false) LocalDateTime end
+    ) {
+        requireActive(slug);
+        return clickLogService.uniqueStatsBySlug(slug, start, end, windowMinutes);
     }
 
 }
