@@ -1,0 +1,20 @@
+{
+  "links": [
+    {
+      "slug": "abc123",
+      "originalUrl": "https://www.google.com",
+      "active": true
+    },
+    {
+      "slug": "private123",
+      "originalUrl": "https://www.example.com",
+      "active": false
+    },
+    {
+      "slug": "expired123",
+      "originalUrl": "https://www.yahoo.com",
+      "active": true,
+      "expirationDate": "2025-09-10T00:00:00"
+    }
+  ]
+}
