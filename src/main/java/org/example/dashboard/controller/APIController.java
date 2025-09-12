@@ -74,7 +74,12 @@ public class APIController {
 	}
 
 	/*
-	 * lick + clickLick + 메타 한 번에
+	 * lick + clickLick + 메타 한 번에 
+	 * 
+	 * 25-09-12
+	 * UrlMetaDTO(메타;미리보기,요약 등) 아직 구현 안되어있음 (현재 null로 나옴)
+	 * 
+	 * 
 	 */
 	@GetMapping("/links/{slug}/full")
 	public LinkFullInfoDTO getFull(@PathVariable String slug) {
