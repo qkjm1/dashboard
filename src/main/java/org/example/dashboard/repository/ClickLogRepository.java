@@ -1,11 +1,13 @@
 package org.example.dashboard.repository;
 
 import org.example.dashboard.dto.BrowserCountDTO;
+import org.example.dashboard.dto.CountryCountDTO;
 import org.example.dashboard.dto.ReferrerCountDTO;
 import org.example.dashboard.vo.ClickLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -59,4 +61,25 @@ public interface ClickLogRepository {
     // 동일 타깃 URL 전체(모든 slug 합산) 기준 리퍼러 TOP N
     List<ReferrerCountDTO> topReferrersByTargetUrl(@Param("targetUrl") String targetUrl,
                                                    @Param("limit") int limit);
+    
+    // 국가 분포 (slug)
+    List<CountryCountDTO> countryDistBySlug(@Param("slug") String slug,
+                                            @Param("start") LocalDateTime start,
+                                            @Param("end") LocalDateTime end);
+
+    // 총 클릭
+    long totalClicksBySlug(@Param("slug") String slug,
+                           @Param("start") LocalDateTime start,
+                           @Param("end") LocalDateTime end);
+
+    // ip_hash + UA 유니크
+    long uniqueApproxBySlug(@Param("slug") String slug,
+                            @Param("start") LocalDateTime start,
+                            @Param("end") LocalDateTime end);
+
+    // 짧은 간격 필터 유니크(윈도우, 분 단위)
+    long uniqueWindowedBySlug(@Param("slug") String slug,
+                              @Param("start") LocalDateTime start,
+                              @Param("end") LocalDateTime end,
+                              @Param("winMin") int winMin);
 }

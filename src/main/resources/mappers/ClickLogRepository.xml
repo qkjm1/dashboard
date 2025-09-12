@@ -15,7 +15,8 @@
 		channel,
 		device_type,
 		browser,
-		os
+		os,
+		country_code
 		) VALUES (
 		#{linkId},
 		NOW(),
@@ -25,7 +26,8 @@
 		#{channel},
 		#{deviceType},
 		#{browser},
-		#{os}
+		#{os},
+		#{countryCode}
 		)
 	</insert>
 
@@ -272,6 +274,46 @@
 		AS `key`, COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id =
 		c.link_id WHERE l.original_url = #{targetUrl} GROUP BY `key` ORDER BY
 		cnt DESC LIMIT #{limit} </select>
+
+
+	<!-- 시간 조건 공통 -->
+	<sql id="TIME_RANGE">
+		<if test="start != null"> AND c.clicked_at &gt;= #{start} </if>
+		<if test="end != null"> AND c.clicked_at &lt; #{end} </if>
+	</sql>
+
+	<!-- 국가 분포 -->
+	<select id="countryDistBySlug"
+		resultType="org.example.dashboard.dto.CountryCountDTO"> SELECT
+		COALESCE(NULLIF(c.country_code,''), 'UN') AS countryCode, COUNT(*) AS
+		cnt FROM click_log c JOIN link l ON l.id = c.link_id WHERE l.slug =
+		#{slug} <include refid="TIME_RANGE" /> GROUP BY countryCode ORDER BY cnt
+		DESC </select>
+
+	<!-- 총 클릭 -->
+	<select id="totalClicksBySlug" resultType="long"> SELECT COUNT(*) FROM
+		click_log c JOIN link l ON l.id = c.link_id WHERE l.slug = #{slug} <include
+			refid="TIME_RANGE" />
+	</select>
+
+	<!-- ip_hash + UA 유니크 -->
+	<select id="uniqueApproxBySlug" resultType="long"> SELECT COUNT(*) FROM (
+		SELECT c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA') ua FROM
+		click_log c JOIN link l ON l.id = c.link_id WHERE l.slug = #{slug} <include
+			refid="TIME_RANGE" /> GROUP BY c.ip_hash,
+		COALESCE(NULLIF(c.user_agent,''), 'NA') ) t </select>
+
+	<!-- 짧은 간격 필터 유니크 (세션 수) -->
+	<!-- MySQL 8.0+ 윈도우 함수 사용 -->
+	<select id="uniqueWindowedBySlug" resultType="long"> SELECT COUNT(*) FROM (
+		SELECT c.clicked_at, CASE WHEN TIMESTAMPDIFF(MINUTE, LAG(c.clicked_at)
+		OVER ( PARTITION BY c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA')
+		ORDER BY c.clicked_at ), c.clicked_at ) IS NULL THEN 1 WHEN
+		TIMESTAMPDIFF(MINUTE, LAG(c.clicked_at) OVER ( PARTITION BY c.ip_hash,
+		COALESCE(NULLIF(c.user_agent,''), 'NA') ORDER BY c.clicked_at ),
+		c.clicked_at ) &gt;= #{winMin} THEN 1 ELSE 0 END AS session_start FROM
+		click_log c JOIN link l ON l.id = c.link_id WHERE l.slug = #{slug} <include
+			refid="TIME_RANGE" /> ) x WHERE session_start = 1 </select>
 
 
 </mapper>

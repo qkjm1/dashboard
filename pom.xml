@@ -42,6 +42,8 @@
 			<artifactId>yauaa</artifactId>
 			<version>7.31.0</version>
 		</dependency>
+
+		<!-- Spring Boot는 logback을 쓰지만, YAUAA는 log4j-api가 필요합니다 -->
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-api</artifactId>
@@ -87,6 +89,13 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+
+			<groupId>com.maxmind.geoip2</groupId>
+			<artifactId>geoip2</artifactId>
+			<version>4.1.0</version>
+    </dependency>
+    
+    <dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>mysql</artifactId>
 			<version>1.19.0</version>
@@ -97,6 +106,7 @@
 			<artifactId>junit-jupiter</artifactId>
 			<version>1.19.0</version>
 			<scope>test</scope>
+
 		</dependency>
 
 		<!-- 그래프용 JFreeChart -->
