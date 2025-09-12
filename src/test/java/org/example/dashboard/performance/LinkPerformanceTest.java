@@ -21,7 +21,7 @@ public class LinkPerformanceTest {
     private static final String BASE_URL = "http://localhost:8080/r/";
     private static final int THREAD_COUNT = 50;
     private static final int REQUESTS_PER_THREAD = 10;
-    private static final String SLUG = "abc123";
+    private static final String SLUG = "a0boWV";
 
     static class Result {
         long responseTimeMs;
