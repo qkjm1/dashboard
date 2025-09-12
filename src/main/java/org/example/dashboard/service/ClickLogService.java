@@ -4,6 +4,7 @@ import org.example.dashboard.dto.BrowserCountDTO;
 import org.example.dashboard.dto.BurstStatsDTO;
 import org.example.dashboard.dto.LinkStatsDTO;
 import org.example.dashboard.dto.ReExposeStatsDTO;
+import org.example.dashboard.dto.ReferrerCountDTO;
 import org.example.dashboard.dto.TimeBucketCountDTO;
 import org.example.dashboard.repository.ClickLogRepository;
 import org.example.dashboard.vo.ClickLog;
@@ -276,6 +277,18 @@ public class ClickLogService {
             long cnt = ((Number)m.get("cnt")).longValue();
             return new TimeBucketCountDTO(bucket, cnt);
         }).collect(Collectors.toList());
+    }
+    
+    public List<ReferrerCountDTO> topReferrersBySlug(String slug, int limit) {
+        return clickLogRepository.topReferrersBySlug(slug, limit);
+    }
+
+    public List<ReferrerCountDTO> topChannelsBySlug(String slug, int limit) {
+        return clickLogRepository.topChannelsBySlug(slug, limit);
+    }
+
+    public List<ReferrerCountDTO> topReferrersByTargetUrl(String targetUrl, int limit) {
+        return clickLogRepository.topReferrersByTargetUrl(targetUrl, limit);
     }
     
 }

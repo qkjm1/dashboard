@@ -1,6 +1,7 @@
 package org.example.dashboard.repository;
 
 import org.example.dashboard.dto.BrowserCountDTO;
+import org.example.dashboard.dto.ReferrerCountDTO;
 import org.example.dashboard.vo.ClickLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -46,4 +47,16 @@ public interface ClickLogRepository {
 			@Param("centerTs") java.sql.Timestamp centerTs, @Param("windowHours") int windowHours,
 			@Param("side") String side // "before" | "after"
 	);
+	
+	// 리퍼러 호스트 TOP N (slug 기준)
+    List<ReferrerCountDTO> topReferrersBySlug(@Param("slug") String slug,
+                                              @Param("limit") int limit);
+
+    // 채널 TOP N (slug 기준)
+    List<ReferrerCountDTO> topChannelsBySlug(@Param("slug") String slug,
+                                             @Param("limit") int limit);
+
+    // 동일 타깃 URL 전체(모든 slug 합산) 기준 리퍼러 TOP N
+    List<ReferrerCountDTO> topReferrersByTargetUrl(@Param("targetUrl") String targetUrl,
+                                                   @Param("limit") int limit);
 }
