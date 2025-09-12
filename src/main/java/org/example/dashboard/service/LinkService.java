@@ -16,6 +16,7 @@ public class LinkService {
 
     // 링크 생성
     public Link createLink(String originalUrl) {
+    	System.out.println(originalUrl);
         Link link = new Link();
         link.setOriginalUrl(originalUrl);
         link.setActive(true);
@@ -28,6 +29,7 @@ public class LinkService {
         } while(linkRepository.countBySlug(slug) > 0 && attempt < 3);
         link.setSlug(slug);
 
+        System.out.println(link);
         linkRepository.insertLink(link);
         return link;
     }
