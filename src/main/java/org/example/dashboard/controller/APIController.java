@@ -272,11 +272,15 @@ public class APIController {
 	 */
 	@RestControllerAdvice
 	public class GlobalExceptionHandler {
-
-		@ExceptionHandler(IllegalArgumentException.class)
-		public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException e) {
-			return ResponseEntity.badRequest().body(e.getMessage());
-		}
-	}
+	    @ExceptionHandler(IllegalArgumentException.class)
+	    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException e) {
+	       return ResponseEntity.badRequest().body(e.getMessage());
+	    }
+	}	
+	
+	
+	
+	
+	
 
 }

@@ -58,13 +58,21 @@ public class LinkController {
         log.setReferrer(request.getHeader("Referer"));
         log.setUserAgent(request.getHeader("User-Agent"));
         System.out.println(log);
-        
+     
+        // 클릭로그저장 풍부화 데이터 합치
         clickLogService.saveClickFromRequest(link, request);
+        
+     // 2) 실제 리다이렉트
+        response.setStatus(HttpServletResponse.SC_FOUND);
+        response.setHeader("Location", link.getOriginalUrl());
         
         response.sendRedirect(link.getOriginalUrl());
     }
     
     
+    /*
+     * 프론트에서 qr연결
+     */
     @GetMapping("/q/{slug}")
     public void redirectQr(@PathVariable String slug,
                            @RequestParam(required = false) String m,   // medium: poster/bizcard/banner...
