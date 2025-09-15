@@ -62,10 +62,6 @@ public class LinkController {
         // 클릭로그저장 풍부화 데이터 합치
         clickLogService.saveClickFromRequest(link, request);
         
-     // 2) 실제 리다이렉트
-        response.setStatus(HttpServletResponse.SC_FOUND);
-        response.setHeader("Location", link.getOriginalUrl());
-        
         response.sendRedirect(link.getOriginalUrl());
     }
     

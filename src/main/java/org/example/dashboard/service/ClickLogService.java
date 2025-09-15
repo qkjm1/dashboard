@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,12 +33,14 @@ import java.util.*;
 import java.util.stream.*;
 
 @Service
+@RequiredArgsConstructor
 public class ClickLogService {
 
 	@Autowired
 	private ClickLogRepository clickLogRepository;
 	@Autowired
-	private GeoIPResolver geoIPResolver;
+	private GeoIPResolver geoIPResolver;   // CF 헤더 없을 때 보조   
+    private final ClickLogEnricher enricher;       // UA/OS/봇/해시/host 등 일괄 처리
 
 	private static final UserAgentAnalyzer UAA = UserAgentAnalyzer.newBuilder().withField(UserAgent.AGENT_NAME) // 브라우저
 			.withField(UserAgent.OPERATING_SYSTEM_NAME) // OS
@@ -119,149 +123,78 @@ public class ClickLogService {
 		return stats;
 	}
 
-	private String extractClientIp(HttpServletRequest req) {
-		// XFF 우선 추출
-		String xff = req.getHeader("X-Forwarded-For");
-		if (xff != null && !xff.isBlank()) {
-			return xff.split(",")[0].trim();
-		}
-		String realIp = req.getHeader("X-Real-IP");
-		if (realIp != null && !realIp.isBlank())
-			return realIp.trim();
-		return req.getRemoteAddr();
-	}
+    /* 공통: XFF 등에서 클라이언트 IP 추출 */
+    private String extractClientIp(HttpServletRequest req) {
+        String xff = req.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        String realIp = req.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) return realIp.trim();
+        return req.getRemoteAddr();
+    }
 
-	public void saveClickWithChannel(Link link, HttpServletRequest req, String channelOverride) {
-		String clientIp = extractClientIp(req);
+    /** QR 등 채널이 명시되는 케이스 */
+    public void saveClickWithChannel(Link link, HttpServletRequest req, String channelOverride) {
+        ClickLog log = ClickLog.builder()
+                .linkId(link.getId())
+                .clickedAt(LocalDateTime.now())
+                .channel(channelOverride)  // 우선 명시된 채널 사용
+                .build();
 
-		String cfCountry = req.getHeader("CF-IPCountry");
-		String country = (cfCountry != null && !cfCountry.isBlank()) ? cfCountry.toUpperCase()
-				: geoIPResolver.countryCode(clientIp);
+        // referrer는 디버깅/보존용으로만 세팅
+        log.setReferrer(req.getHeader("Referer"));
 
-		// ↓ 기본값 보강
-		if (country == null || country.isBlank()) {
-			country = "UN";
-		}
+        // Enricher로 나머지 필드 채우기
+        enricher.enrichFromRequest(log, req);  // UA/봇/ipHash/referrerHost/OS/Browser/DeviceType 등
 
-		ClickLog log = new ClickLog();
-		log.setLinkId(link.getId());
-		log.setCountryCode(country);
+        if (log.getCountryCode() == null || log.getCountryCode().isBlank()) {
+            String ip = extractClientIp(req);
+            String cc = geoIPResolver.countryCode(ip);
+            if (cc != null && !cc.isBlank()) log.setCountryCode(cc.toUpperCase());
+        }
 
-		// IP 해시 (간단 버전 유지)
-		String ip = req.getRemoteAddr();
-		log.setIpHash(ip == null ? "UNKNOWN" : Integer.toHexString(ip.hashCode()));
+        clickLogRepository.insertClickLog(log);
+    }
 
-		// 1) Referrer & Channel
-		String ref = req.getHeader("Referer");
-		log.setReferrer(ref);
-		String host = null;
-		try {
-			host = (ref != null) ? new URI(ref).getHost() : null;
-		} catch (Exception ignored) {
-		}
-		if (channelOverride != null && !channelOverride.isBlank()) {
-			log.setChannel(channelOverride);
-		} else {
-			log.setChannel(toChannel(host, ref)); // DIRECT/UNKNOWN 포함
-		}
+    /** 리다이렉트 일반 케이스 저장: 채널은 referrer로 산정 */
+    public void saveClickFromRequest(Link link, HttpServletRequest req) {
+        ClickLog log = ClickLog.builder()
+                .linkId(link.getId())
+                .clickedAt(LocalDateTime.now())
+                .build();
 
-		// 2) UA → browser/os/deviceType (YAUAA)
-		String uaString = req.getHeader("User-Agent");
-		log.setUserAgent(uaString);
+        // 1) 우선 채널만 결정(나머지는 Enricher에서)
+        String ref = req.getHeader("Referer");
+        String host = null;
+        try { host = (ref != null) ? new URI(ref).getHost() : null; } catch (Exception ignored) {}
+        log.setReferrer(ref);
+        log.setChannel(toChannel(host, ref));
 
-		if (uaString != null && !uaString.isBlank()) {
-			UserAgent ua = UAA.parse(uaString);
+        // 2) 요청 데이터 풍부화 (UA/OS/브라우저/디바이스/봇/ipHash/referrerHost/countryCode 등)
+        enricher.enrichFromRequest(log, req);  // ← 일원화된 로직 사용  (:contentReference[oaicite:3]{index=3})
 
-			String browser = nz(ua.getValue(UserAgent.AGENT_NAME), "UNKNOWN");
-			String os = nz(ua.getValue(UserAgent.OPERATING_SYSTEM_NAME), "UNKNOWN");
-			String deviceC = nz(ua.getValue(UserAgent.DEVICE_CLASS), "Unknown");
+        // 3) 국가코드 보조 결정(Enricher가 못 채웠다면 GeoIP로)
+        if (log.getCountryCode() == null || log.getCountryCode().isBlank()) {
+            String ip = extractClientIp(req);
+            String cc = geoIPResolver.countryCode(ip);
+            if (cc != null && !cc.isBlank()) log.setCountryCode(cc.toUpperCase());
+        }
 
-			log.setBrowser(browser);
-			log.setOs(os);
-			log.setDeviceType(mapDeviceClass(deviceC)); // "MOBILE" | "TABLET" | "DESKTOP" | "OTHER"
-		} else {
-			log.setBrowser("UNKNOWN");
-			log.setOs("UNKNOWN");
-			log.setDeviceType("OTHER");
-		}
+        // 4) 저장
+        clickLogRepository.insertClickLog(log);
+    }
 
-		clickLogRepository.insertClickLog(log);
-
-	}
-
-	public void saveClickFromRequest(Link link, HttpServletRequest req) {
-		String clientIp = extractClientIp(req);
-
-		String cfCountry = req.getHeader("CF-IPCountry");
-		String country = (cfCountry != null && !cfCountry.isBlank()) ? cfCountry.toUpperCase()
-				: geoIPResolver.countryCode(clientIp);
-
-		// ↓ 기본값 보강
-		if (country == null || country.isBlank()) {
-			country = "UN";
-		}
-
-		ClickLog log = new ClickLog();
-		log.setLinkId(link.getId());
-		log.setCountryCode(country);
-
-		// IP 해시 (간단 버전 유지)
-		String ip = req.getRemoteAddr();
-		log.setIpHash(ip == null ? "UNKNOWN" : Integer.toHexString(ip.hashCode()));
-
-		// 1) Referrer & Channel
-		String ref = req.getHeader("Referer");
-		log.setReferrer(ref);
-		String host = null;
-		try {
-			host = (ref != null) ? new URI(ref).getHost() : null;
-		} catch (Exception ignored) {
-		}
-
-		log.setChannel(toChannel(host, ref)); // DIRECT/UNKNOWN 포함
-
-		// 2) UA → browser/os/deviceType (YAUAA)
-		String uaString = req.getHeader("User-Agent");
-		log.setUserAgent(uaString);
-
-		if (uaString != null && !uaString.isBlank()) {
-			UserAgent ua = UAA.parse(uaString);
-
-			String browser = nz(ua.getValue(UserAgent.AGENT_NAME), "UNKNOWN");
-			String os = nz(ua.getValue(UserAgent.OPERATING_SYSTEM_NAME), "UNKNOWN");
-			String deviceC = nz(ua.getValue(UserAgent.DEVICE_CLASS), "Unknown");
-
-			log.setBrowser(browser);
-			log.setOs(os);
-			log.setDeviceType(mapDeviceClass(deviceC)); // "MOBILE" | "TABLET" | "DESKTOP" | "OTHER"
-		} else {
-			log.setBrowser("UNKNOWN");
-			log.setOs("UNKNOWN");
-			log.setDeviceType("OTHER");
-		}
-
-		clickLogRepository.insertClickLog(log);
-
-	}
-
-	private String toChannel(String host, String referrer) {
-		if (referrer == null)
-			return "DIRECT";
-		if (host == null)
-			return "UNKNOWN";
-		host = host.toLowerCase();
-		if (host.contains("google."))
-			return "GOOGLE";
-		if (host.contains("naver."))
-			return "NAVER";
-		if (host.contains("kakao."))
-			return "KAKAO";
-		if (host.contains("instagram."))
-			return "INSTAGRAM";
-		if (host.contains("facebook.") || host.contains("fb."))
-			return "FACEBOOK";
-		return "UNKNOWN";
-	}
+    /* referrer 기반 간단 채널 매핑 */
+    private String toChannel(String host, String referrer) {
+        if (referrer == null) return "DIRECT";
+        if (host == null)     return "UNKNOWN";
+        String h = host.toLowerCase();
+        if (h.contains("google."))    return "GOOGLE";
+        if (h.contains("naver."))     return "NAVER";
+        if (h.contains("kakao."))     return "KAKAO";
+        if (h.contains("instagram.")) return "INSTAGRAM";
+        if (h.contains("facebook.") || h.contains("fb.")) return "FACEBOOK";
+        return "UNKNOWN";
+    }
 
 	private String mapDeviceClass(String deviceClass) {
 		// YAUAA DeviceClass 예: "Desktop", "Mobile", "Tablet", "Phone", "TV", "Game
