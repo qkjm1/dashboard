@@ -65,6 +65,9 @@ public class LinkController {
     }
     
     
+    /*
+     * 프론트에서 qr연결
+     */
     @GetMapping("/q/{slug}")
     public void redirectQr(@PathVariable String slug,
                            @RequestParam(required = false) String m,   // medium: poster/bizcard/banner...

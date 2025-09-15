@@ -20,6 +20,7 @@ import org.example.dashboard.vo.Link;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -264,8 +265,33 @@ public class APIController {
 		requireActive(slug);
 		return clickLogService.scanDistribution(slug, source, granularity, start, end);
 	}
+
+	
+	
+	
+	
+	
+	
+	
+	
+/*	-help-  */
+	
 	/*
-	 * ---- qr집계 부분
+	 * timeDistribution()에서 예외가 400으로 넘어가야 하는데 404로 넘어가버려서
+	 * 400(badRequest)로 보낼 수 있도록 이끌어주는 컨트롤러
 	 */
+	@RestControllerAdvice
+	public class GlobalExceptionHandler {
+
+	    @ExceptionHandler(IllegalArgumentException.class)
+	    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException e) {
+	       return ResponseEntity.badRequest().body(e.getMessage());
+	    }
+	}	
+	
+	
+	
+	
+	
 
 }
