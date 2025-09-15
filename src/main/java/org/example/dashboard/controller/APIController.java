@@ -101,7 +101,7 @@ public class APIController {
 	}
 
 	/*
-	 * 해당 slug 최근 클릭로그 N건
+	 * 해당 slug 최근 클릭로그 N건 현재 100건이 디폴트
 	 */
 	@GetMapping("/links/{slug}/logs")
 	public List<ClickLog> getRecentLogs(@PathVariable String slug, @RequestParam(defaultValue = "100") int limit) {

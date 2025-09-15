@@ -38,6 +38,12 @@
 			<version>3.0.5</version>
 		</dependency>
 
+		<!-- actuator -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
 		<!-- UA parser (크롤러/브라우저 식별) -->
 		<dependency>
 			<groupId>com.github.ua-parser</groupId>

@@ -22,6 +22,8 @@ CREATE TABLE click_log (
 );
 
 
+
+-- 봇 차단 율 / 이상스파이크 감지용 추가 컬럼
 ALTER TABLE click_log
   ADD COLUMN country_code CHAR(2) NULL AFTER channel;
   
@@ -30,6 +32,24 @@ ALTER TABLE click_log
   ADD COLUMN bot_type VARCHAR(32) NULL,         -- 'crawler' | 'preview' | 'healthcheck' | 'unknown'         -- CF-IPCountry 등
   ADD COLUMN referrer_host VARCHAR(128) NULL;
 
+
+CREATE INDEX idx_click_slug_time ON click_log(link_id, clicked_at);
+CREATE INDEX idx_click_bot ON click_log(is_bot, bot_type);
+CREATE INDEX idx_click_ref_host_hour ON click_log(referrer_host, clicked_at);
+
+
+-- 타깃 URL 헬스체크 기록용 / 링크상태 / 만기 관리 / 깨진링크관리
+CREATE TABLE link_health (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  link_id BIGINT NOT NULL,
+  checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  http_status INT NULL,
+  redirect_hops INT DEFAULT 0,
+  is_loop TINYINT(1) DEFAULT 0,
+  ok TINYINT(1) GENERATED ALWAYS AS (CASE WHEN http_status BETWEEN 200 AND 399 AND is_loop=0 THEN 1 ELSE 0 END) VIRTUAL,
+  message VARCHAR(512) NULL,
+  INDEX idx_health_link_time (link_id, checked_at)
+);
 
   
   --- ######### ClickLogRepository 쿼리 순수 db용 --
