@@ -266,23 +266,12 @@ public class APIController {
 		return clickLogService.scanDistribution(slug, source, granularity, start, end);
 	}
 
-	
-	
-	
-	
-	
-	
-	
-	
-/*	-help-  */
-	
 	/*
 	 * timeDistribution()에서 예외가 400으로 넘어가야 하는데 404로 넘어가버려서
 	 * 400(badRequest)로 보낼 수 있도록 이끌어주는 컨트롤러
 	 */
 	@RestControllerAdvice
 	public class GlobalExceptionHandler {
-
 	    @ExceptionHandler(IllegalArgumentException.class)
 	    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException e) {
 	       return ResponseEntity.badRequest().body(e.getMessage());
