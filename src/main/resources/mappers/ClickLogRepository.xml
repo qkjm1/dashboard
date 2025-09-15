@@ -3,365 +3,361 @@
 
 <mapper namespace="org.example.dashboard.repository.ClickLogRepository">
 
-	<!-- 클릭 로그 저장 -->
-	<insert id="insertClickLog"
-		parameterType="org.example.dashboard.vo.ClickLog">
-		INSERT INTO click_log (
-		link_id,
-		clicked_at,
-		ip_hash,
-		user_agent,
-		referrer,
-		channel,
-		device_type,
-		browser,
-		os,
-		country_code
-		) VALUES (
-		#{linkId},
-		NOW(),
-		#{ipHash},
-		#{userAgent},
-		#{referrer},
-		#{channel},
-		#{deviceType},
-		#{browser},
-		#{os},
-		#{countryCode}
-		)
-	</insert>
+  <!-- =========================
+       공통 조각 (단일 정의)
+       ========================= -->
+  <!-- referrer 호스트 추출: 항상 테이블 별칭 c 기준 -->
+  <sql id="REF_HOST_EXPR">
+    LOWER(
+      REPLACE(
+        REPLACE(
+          SUBSTRING_INDEX(SUBSTRING_INDEX(COALESCE(c.referrer,''), '/', 3), '/', -1),
+          'www.', ''
+        ),
+        'm.', ''
+      )
+    )
+  </sql>
 
-	<!-- 특정 링크의 클릭 로그 조회 -->
-	<select id="selectByLinkId" parameterType="long"
-		resultType="org.example.dashboard.vo.ClickLog">
-		SELECT
-		id,
-		link_id AS linkId,
-		clicked_at AS clickedAt,
-		ip_hash AS ipHash,
-		user_agent AS userAgent,
-		referrer,
-		channel,
-		device_type AS deviceType,
-		browser,
-		os
-		FROM click_log
-		WHERE link_id = #{linkId}
-		ORDER BY clicked_at DESC
-	</select>
+  <!-- 시간 범위 필터 (별칭 c) -->
+  <sql id="TIME_RANGE">
+    <if test="start != null"> AND c.clicked_at &gt;= #{start} </if>
+    <if test="end != null"> AND c.clicked_at &lt; #{end} </if>
+  </sql>
 
+  <!-- 소스 필터 (별칭 c) -->
+  <sql id="SOURCE_FILTER">
+    <if test="source == 'qr'">
+      AND COALESCE(c.channel,'') LIKE 'QR:%'
+    </if>
+    <if test="source == 'link'">
+      AND (c.channel IS NULL OR c.channel NOT LIKE 'QR:%')
+    </if>
+  </sql>
 
-	<!-- 특정 링크의 클릭 수 -->
-	<select id="countByLinkId" parameterType="long" resultType="int">
-		SELECT COUNT(*) FROM click_log WHERE link_id = #{linkId}
-	</select>
+  <!-- =========================
+       단순 CUD/조회
+       ========================= -->
+  <insert id="insertClickLog" parameterType="org.example.dashboard.vo.ClickLog">
+    INSERT INTO click_log (
+      link_id, clicked_at, ip_hash, user_agent,
+      referrer, referrer_host, channel,
+      device_type, browser, os,
+      country_code, is_bot, bot_type
+    ) VALUES (
+      #{linkId},
+      COALESCE(#{clickedAt}, NOW()),
+      #{ipHash},
+      #{userAgent},
+      #{referrer},
+      #{referrerHost},
+      #{channel},
+      #{deviceType},
+      #{browser},
+      #{os},
+      #{countryCode},
+      #{isBot},
+      #{botType}
+    )
+  </insert>
 
-
-	<select id="last24hByHour" resultType="map">
-		SELECT DATE_FORMAT(clicked_at, '%Y-%m-%d %H:00:00') AS hour, COUNT(*) AS
-		cnt
-		FROM click_log
-		WHERE link_id = #{linkId}
-		AND clicked_at >= NOW() - INTERVAL 24 HOUR
-		GROUP BY DATE_FORMAT(clicked_at, '%Y-%m-%d %H:00:00')
-		ORDER BY hour
-	</select>
-
-	<select id="last7dByDate" resultType="map">
-		SELECT DATE(clicked_at) AS date, COUNT(*) AS cnt
-		FROM click_log
-		WHERE link_id = #{linkId}
-		AND clicked_at >= CURDATE() - INTERVAL 6 DAY
-		GROUP BY DATE(clicked_at)
-		ORDER BY date
-	</select>
-
-	<select id="byChannel" resultType="map">
-		SELECT COALESCE(NULLIF(channel,''),'UNKNOWN') AS channel, COUNT(*) AS
-		cnt
-		FROM click_log
-		WHERE link_id = #{linkId}
-		GROUP BY COALESCE(NULLIF(channel,''),'UNKNOWN')
-		ORDER BY cnt DESC
-	</select>
-
-	<select id="byDevice" resultType="map">
-		SELECT COALESCE(NULLIF(device_type,''),'OTHER') AS deviceType, COUNT(*)
-		AS cnt
-		FROM click_log
-		WHERE link_id = #{linkId}
-		GROUP BY COALESCE(NULLIF(device_type,''),'OTHER')
-		ORDER BY cnt DESC
-	</select>
-
-	<select id="topBrowsers" resultType="map">
-		SELECT COALESCE(NULLIF(browser,''),'UNKNOWN') AS browser, COUNT(*) AS
-		cnt
-		FROM click_log
-		WHERE link_id = #{linkId}
-		GROUP BY COALESCE(NULLIF(browser,''),'UNKNOWN')
-		ORDER BY cnt DESC
-		LIMIT #{limit}
-	</select>
-
-	<select id="topOS" resultType="map">
-		SELECT COALESCE(NULLIF(os,''),'UNKNOWN') AS os, COUNT(*) AS cnt
-		FROM click_log
-		WHERE link_id = #{linkId}
-		GROUP BY COALESCE(NULLIF(os,''),'UNKNOWN')
-		ORDER BY cnt DESC
-		LIMIT #{limit}
-	</select>
-
-	<select id="topReferrerHost" resultType="map">
-		SELECT
-		CASE
-		WHEN referrer IS NULL OR referrer = '' THEN 'DIRECT'
-		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(referrer, '://', -1), '/', 1)
-		END AS host,
-		COUNT(*) AS cnt
-		FROM click_log
-		WHERE link_id = #{linkId}
-		GROUP BY host
-		ORDER BY cnt DESC
-		LIMIT #{limit}
-	</select>
-
-	<select id="browseCntBySlug"
-		parameterType="string"
-		resultType="org.example.dashboard.dto.BrowserCountDTO">
-		SELECT c.browser AS browser, COUNT(*) AS cnt
-		FROM link l
-		JOIN click_log c ON c.link_id = l.id
-		WHERE l.slug = #{slug}
-		GROUP BY c.browser
-		ORDER BY cnt DESC;
-	</select>
-
-	<!-- 시간대 분포 (0~23시) -->
-	<select id="hourlyDistBySlug" parameterType="string"
-		resultType="map">
-		SELECT
-		HOUR(c.clicked_at) AS bucket,
-		COUNT(*) AS cnt
-		FROM link l
-		JOIN click_log c ON c.link_id = l.id
-		WHERE l.slug = #{slug}
-		GROUP BY bucket
-		ORDER BY bucket
-	</select>
-
-	<!-- 요일 분포 (1=일요일 ~ 7=토요일: MySQL DAYOFWEEK) -->
-	<select id="dowDistBySlug" parameterType="string"
-		resultType="map">
-		SELECT
-		DAYOFWEEK(c.clicked_at) AS bucket,
-		COUNT(*) AS cnt
-		FROM link l
-		JOIN click_log c ON c.link_id = l.id
-		WHERE l.slug = #{slug}
-		GROUP BY bucket
-		ORDER BY bucket
-	</select>
-
-	<!-- 월별 분포 (YYYY-MM) -->
-	<select id="monthDistBySlug" parameterType="string"
-		resultType="map">
-		SELECT
-		DATE_FORMAT(c.clicked_at, '%Y-%m') AS bucket,
-		COUNT(*) AS cnt
-		FROM link l
-		JOIN click_log c ON c.link_id = l.id
-		WHERE l.slug = #{slug}
-		GROUP BY bucket
-		ORDER BY bucket
-	</select>
-
-	<!-- 링크 생성 이후 시간 경과(시간단위) 별 카운트: 버스트/하프라이프 계산용 -->
-	<select id="hoursSinceCreateBySlug" parameterType="string"
-		resultType="map">
-		SELECT
-		TIMESTAMPDIFF(HOUR, l.created_at, c.clicked_at) AS bucket,
-		COUNT(*) AS cnt
-		FROM link l
-		JOIN click_log c ON c.link_id = l.id
-		WHERE l.slug = #{slug}
-		AND c.clicked_at >= l.created_at
-		GROUP BY bucket
-		HAVING bucket >= 0
-		ORDER BY bucket
-	</select>
-
-	<!-- 기준시각 전/후 N시간 윈도우 비교용 시계열 (분해능: 1시간) -->
-	<select id="seriesHourlyAroundMoment"
-		parameterType="map"
-		resultType="map">
-  <![CDATA[
-    /* params: slug, centerTs (DATETIME), windowHours (INT), side ('before'|'after') */
+  <select id="selectByLinkId" parameterType="long" resultType="org.example.dashboard.vo.ClickLog">
     SELECT
-      DATE_FORMAT(c.clicked_at, '%Y-%m-%d %H:00:00') AS tsHour,
+      id,
+      link_id        AS linkId,
+      clicked_at     AS clickedAt,
+      ip_hash        AS ipHash,
+      user_agent     AS userAgent,
+      referrer,
+      referrer_host  AS referrerHost,
+      channel,
+      device_type    AS deviceType,
+      browser,
+      os,
+      country_code   AS countryCode,
+      is_bot         AS isBot,
+      bot_type       AS botType
+    FROM click_log
+    WHERE link_id = #{linkId}
+    ORDER BY clicked_at DESC
+  </select>
+
+  <select id="countByLinkId" parameterType="long" resultType="int">
+    SELECT COUNT(*) FROM click_log WHERE link_id = #{linkId}
+  </select>
+
+  <!-- =========================
+       기본 통계 (linkId 기준)
+       ========================= -->
+  <select id="last24hByHour" resultType="map">
+    SELECT DATE_FORMAT(clicked_at, '%Y-%m-%d %H:00:00') AS hour, COUNT(*) AS cnt
+    FROM click_log
+    WHERE link_id = #{linkId}
+      AND clicked_at >= NOW() - INTERVAL 24 HOUR
+    GROUP BY DATE_FORMAT(clicked_at, '%Y-%m-%d %H:00:00')
+    ORDER BY hour
+  </select>
+
+  <select id="last7dByDate" resultType="map">
+    SELECT DATE(clicked_at) AS date, COUNT(*) AS cnt
+    FROM click_log
+    WHERE link_id = #{linkId}
+      AND clicked_at >= CURDATE() - INTERVAL 6 DAY
+    GROUP BY DATE(clicked_at)
+    ORDER BY date
+  </select>
+
+  <select id="byChannel" resultType="map">
+    SELECT COALESCE(NULLIF(channel,''),'UNKNOWN') AS channel, COUNT(*) AS cnt
+    FROM click_log
+    WHERE link_id = #{linkId}
+    GROUP BY COALESCE(NULLIF(channel,''),'UNKNOWN')
+    ORDER BY cnt DESC
+  </select>
+
+  <select id="byDevice" resultType="map">
+    SELECT COALESCE(NULLIF(device_type,''),'OTHER') AS deviceType, COUNT(*) AS cnt
+    FROM click_log
+    WHERE link_id = #{linkId}
+    GROUP BY COALESCE(NULLIF(device_type,''),'OTHER')
+    ORDER BY cnt DESC
+  </select>
+
+  <select id="topBrowsers" resultType="map">
+    SELECT COALESCE(NULLIF(c.browser,''),'UNKNOWN') AS browser, COUNT(*) AS cnt
+    FROM click_log c
+    WHERE c.link_id = #{linkId}
+    GROUP BY COALESCE(NULLIF(c.browser,''),'UNKNOWN')
+    ORDER BY cnt DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="topOS" resultType="map">
+    SELECT COALESCE(NULLIF(c.os,''),'UNKNOWN') AS os, COUNT(*) AS cnt
+    FROM click_log c
+    WHERE c.link_id = #{linkId}
+    GROUP BY COALESCE(NULLIF(c.os,''),'UNKNOWN')
+    ORDER BY cnt DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="topReferrerHost" resultType="map">
+    SELECT
+      CASE
+        WHEN c.referrer IS NULL OR c.referrer = '' THEN 'DIRECT'
+        ELSE COALESCE(c.referrer_host, <include refid="REF_HOST_EXPR" />)
+      END AS host,
       COUNT(*) AS cnt
+    FROM click_log c
+    WHERE c.link_id = #{linkId}
+    GROUP BY host
+    ORDER BY cnt DESC
+    LIMIT #{limit}
+  </select>
+
+  <!-- =========================
+       slug / targetUrl 기준 집계
+       ========================= -->
+  <select id="browseCntBySlug" parameterType="string" resultType="org.example.dashboard.dto.BrowserCountDTO">
+    SELECT c.browser AS browser, COUNT(*) AS cnt
     FROM link l
     JOIN click_log c ON c.link_id = l.id
     WHERE l.slug = #{slug}
-      AND c.clicked_at >=
+    GROUP BY c.browser
+    ORDER BY cnt DESC
+  </select>
+
+  <select id="hourlyDistBySlug" parameterType="string" resultType="map">
+    SELECT HOUR(c.clicked_at) AS bucket, COUNT(*) AS cnt
+    FROM link l JOIN click_log c ON c.link_id = l.id
+    WHERE l.slug = #{slug}
+    GROUP BY bucket
+    ORDER BY bucket
+  </select>
+
+  <select id="dowDistBySlug" parameterType="string" resultType="map">
+    SELECT DAYOFWEEK(c.clicked_at) AS bucket, COUNT(*) AS cnt
+    FROM link l JOIN click_log c ON c.link_id = l.id
+    WHERE l.slug = #{slug}
+    GROUP BY bucket
+    ORDER BY bucket
+  </select>
+
+  <select id="monthDistBySlug" parameterType="string" resultType="map">
+    SELECT DATE_FORMAT(c.clicked_at, '%Y-%m') AS bucket, COUNT(*) AS cnt
+    FROM link l JOIN click_log c ON c.link_id = l.id
+    WHERE l.slug = #{slug}
+    GROUP BY bucket
+    ORDER BY bucket
+  </select>
+
+  <select id="hoursSinceCreateBySlug" parameterType="string" resultType="map">
+    SELECT TIMESTAMPDIFF(HOUR, l.created_at, c.clicked_at) AS bucket, COUNT(*) AS cnt
+    FROM link l JOIN click_log c ON c.link_id = l.id
+    WHERE l.slug = #{slug}
+      AND c.clicked_at >= l.created_at
+    GROUP BY bucket
+    HAVING bucket >= 0
+    ORDER BY bucket
+  </select>
+
+  <!-- 시계열 비교 (before/after) -->
+  <select id="seriesHourlyAroundMoment" parameterType="map" resultType="map">
+    <![CDATA[
+      /* params: slug, centerTs (DATETIME), windowHours (INT), side ('before'|'after') */
+      SELECT
+        DATE_FORMAT(c.clicked_at, '%Y-%m-%d %H:00:00') AS tsHour,
+        COUNT(*) AS cnt
+      FROM link l
+      JOIN click_log c ON c.link_id = l.id
+      WHERE l.slug = #{slug}
+        AND c.clicked_at >=
+          CASE WHEN #{side} = 'before'
+               THEN DATE_SUB(#{centerTs}, INTERVAL #{windowHours} HOUR)
+               ELSE #{centerTs} END
+        AND c.clicked_at <
+          CASE WHEN #{side} = 'before'
+               THEN #{centerTs}
+               ELSE DATE_ADD(#{centerTs}, INTERVAL #{windowHours} HOUR) END
+      GROUP BY tsHour
+      ORDER BY tsHour
+    ]]>
+  </select>
+
+  <select id="topReferrersBySlug" resultType="org.example.dashboard.dto.ReferrerCountDTO">
+    SELECT
+      <choose>
+        <when test="_databaseId == 'mysql' or _databaseId == 'mariadb'">
+          COALESCE(c.referrer_host, <include refid="REF_HOST_EXPR" />)
+        </when>
+        <otherwise>
+          <include refid="REF_HOST_EXPR" />
+        </otherwise>
+      </choose>
+      AS `key`,
+      COUNT(*) AS cnt
+    FROM click_log c
+    JOIN link l ON l.id = c.link_id
+    WHERE l.slug = #{slug}
+    GROUP BY `key`
+    ORDER BY cnt DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="topChannelsBySlug" resultType="org.example.dashboard.dto.ReferrerCountDTO">
+    SELECT COALESCE(NULLIF(c.channel,''), 'UNKNOWN') AS `key`, COUNT(*) AS cnt
+    FROM click_log c JOIN link l ON l.id = c.link_id
+    WHERE l.slug = #{slug}
+    GROUP BY `key`
+    ORDER BY cnt DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="topReferrersByTargetUrl" resultType="org.example.dashboard.dto.ReferrerCountDTO">
+    SELECT
+      <choose>
+        <when test="_databaseId == 'mysql' or _databaseId == 'mariadb'">
+          COALESCE(c.referrer_host, <include refid="REF_HOST_EXPR" />)
+        </when>
+        <otherwise>
+          <include refid="REF_HOST_EXPR" />
+        </otherwise>
+      </choose>
+      AS `key`,
+      COUNT(*) AS cnt
+    FROM click_log c
+    JOIN link l ON l.id = c.link_id
+    WHERE l.original_url = #{targetUrl}
+    GROUP BY `key`
+    ORDER BY cnt DESC
+    LIMIT #{limit}
+  </select>
+
+  <!-- =========================
+       분포/유니크/QR
+       ========================= -->
+  <select id="countryDistBySlug" resultType="org.example.dashboard.dto.CountryCountDTO">
+    SELECT COALESCE(NULLIF(c.country_code,''), 'UN') AS countryCode, COUNT(*) AS cnt
+    FROM click_log c JOIN link l ON l.id = c.link_id
+    WHERE l.slug = #{slug}
+      <include refid="TIME_RANGE" />
+    GROUP BY countryCode
+    ORDER BY cnt DESC
+  </select>
+
+  <select id="totalClicksBySlug" resultType="long">
+    SELECT COUNT(*)
+    FROM click_log c JOIN link l ON l.id = c.link_id
+    WHERE l.slug = #{slug}
+      <include refid="TIME_RANGE" />
+  </select>
+
+  <select id="uniqueApproxBySlug" resultType="long">
+    SELECT COUNT(*) FROM (
+      SELECT c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA') ua
+      FROM click_log c JOIN link l ON l.id = c.link_id
+      WHERE l.slug = #{slug}
+        <include refid="TIME_RANGE" />
+      GROUP BY c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA')
+    ) t
+  </select>
+
+  <select id="uniqueWindowedBySlug" resultType="long">
+    SELECT COUNT(*) FROM (
+      SELECT
+        c.clicked_at,
         CASE
-          WHEN #{side} = 'before'
-            THEN DATE_SUB(#{centerTs}, INTERVAL #{windowHours} HOUR)
-          ELSE #{centerTs}
-        END
-      AND c.clicked_at <
-        CASE
-          WHEN #{side} = 'before'
-            THEN #{centerTs}
-          ELSE DATE_ADD(#{centerTs}, INTERVAL #{windowHours} HOUR)
-        END
-    GROUP BY tsHour
-    ORDER BY tsHour
-  ]]>
-	</select>
+          WHEN TIMESTAMPDIFF(MINUTE,
+                LAG(c.clicked_at) OVER (PARTITION BY c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA') ORDER BY c.clicked_at),
+                c.clicked_at) IS NULL THEN 1
+          WHEN TIMESTAMPDIFF(MINUTE,
+                LAG(c.clicked_at) OVER (PARTITION BY c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA') ORDER BY c.clicked_at),
+                c.clicked_at) &gt;= #{winMin} THEN 1
+          ELSE 0
+        END AS session_start
+      FROM click_log c JOIN link l ON l.id = c.link_id
+      WHERE l.slug = #{slug}
+        <include refid="TIME_RANGE" />
+    ) x
+    WHERE session_start = 1
+  </select>
 
-	<!-- 공통: referrer 호스트 추출 (생성 컬럼 없는 경우용) -->
-	<sql id="REF_HOST_EXPR">
-		LOWER(
-		REPLACE(
-		REPLACE(
-		SUBSTRING_INDEX(SUBSTRING_INDEX(COALESCE(c.referrer,''), '/', 3), '/',
-		-1),
-		'www.', ''
-		),
-		'm.', ''
-		)
-		)
-	</sql>
+  <select id="qrVsLinkBySlug" resultType="org.example.dashboard.dto.ReferrerCountDTO">
+    SELECT CASE WHEN COALESCE(c.channel,'') LIKE 'QR:%' THEN 'QR' ELSE 'LINK' END AS `key`,
+           COUNT(*) AS cnt
+    FROM click_log c JOIN link l ON l.id = c.link_id
+    WHERE l.slug = #{slug}
+      <include refid="TIME_RANGE" />
+    GROUP BY `key`
+    ORDER BY `key`
+  </select>
 
-	<!-- 리퍼러 호스트 TOP N (slug 기준) -->
-	<select id="topReferrersBySlug"
-		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT <choose>
-			<when test="_databaseId == 'mysql' or _databaseId == 'mariadb'">
-		COALESCE(c.referrer_host, <include refid="REF_HOST_EXPR" />) </when>
-			<otherwise>
-				<include refid="REF_HOST_EXPR" />
-			</otherwise>
-		</choose>
-		AS `key`, COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id =
-		c.link_id WHERE l.slug = #{slug} GROUP BY `key` ORDER BY cnt DESC LIMIT
-		#{limit} </select>
+  <select id="qrMediumBySlug" resultType="org.example.dashboard.dto.ReferrerCountDTO">
+    SELECT SUBSTRING_INDEX(SUBSTRING_INDEX(c.channel, ':', 2), ':', -1) AS `key`,
+           COUNT(*) AS cnt
+    FROM click_log c JOIN link l ON l.id = c.link_id
+    WHERE l.slug = #{slug}
+      AND COALESCE(c.channel,'') LIKE 'QR:%'
+      <include refid="TIME_RANGE" />
+    GROUP BY `key`
+    ORDER BY cnt DESC
+    LIMIT #{limit}
+  </select>
 
-	<!-- 채널 TOP N (slug 기준) -->
-	<select id="topChannelsBySlug"
-		resultType="org.example.dashboard.dto.ReferrerCountDTO">
-		SELECT
-		COALESCE(NULLIF(c.channel,''), 'UNKNOWN') AS `key`,
-		COUNT(*) AS cnt
-		FROM click_log c
-		JOIN link l ON l.id = c.link_id
-		WHERE l.slug = #{slug}
-		GROUP BY `key`
-		ORDER BY cnt DESC
-		LIMIT #{limit}
-	</select>
-
-	<!-- 동일 타깃 URL 전체 기준 리퍼러 TOP N -->
-	<select id="topReferrersByTargetUrl"
-		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT <choose>
-			<when test="_databaseId == 'mysql' or _databaseId == 'mariadb'">
-		COALESCE(c.referrer_host, <include refid="REF_HOST_EXPR" />) </when>
-			<otherwise>
-				<include refid="REF_HOST_EXPR" />
-			</otherwise>
-		</choose>
-		AS `key`, COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id =
-		c.link_id WHERE l.original_url = #{targetUrl} GROUP BY `key` ORDER BY
-		cnt DESC LIMIT #{limit} </select>
-
-
-	<!-- 시간 조건 공통 -->
-	<sql id="TIME_RANGE">
-		<if test="start != null"> AND c.clicked_at &gt;= #{start} </if>
-		<if test="end != null"> AND c.clicked_at &lt; #{end} </if>
-	</sql>
-
-
-	<!-- 국가 분포 -->
-	<select id="countryDistBySlug"
-		resultType="org.example.dashboard.dto.CountryCountDTO"> SELECT
-		COALESCE(NULLIF(c.country_code,''), 'UN') AS countryCode, COUNT(*) AS
-		cnt FROM click_log c JOIN link l ON l.id = c.link_id WHERE l.slug =
-		#{slug} <include refid="TIME_RANGE" /> GROUP BY countryCode ORDER BY cnt
-		DESC </select>
-
-	<!-- 총 클릭 -->
-	<select id="totalClicksBySlug" resultType="long"> SELECT COUNT(*) FROM
-		click_log c JOIN link l ON l.id = c.link_id WHERE l.slug = #{slug} <include
-			refid="TIME_RANGE" />
-	</select>
-
-	<!-- ip_hash + UA 유니크 -->
-	<select id="uniqueApproxBySlug" resultType="long"> SELECT COUNT(*) FROM (
-		SELECT c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA') ua FROM
-		click_log c JOIN link l ON l.id = c.link_id WHERE l.slug = #{slug} <include
-			refid="TIME_RANGE" /> GROUP BY c.ip_hash,
-		COALESCE(NULLIF(c.user_agent,''), 'NA') ) t </select>
-
-	<!-- 짧은 간격 필터 유니크 (세션 수) -->
-	<!-- MySQL 8.0+ 윈도우 함수 사용 -->
-	<select id="uniqueWindowedBySlug" resultType="long"> SELECT COUNT(*) FROM (
-		SELECT c.clicked_at, CASE WHEN TIMESTAMPDIFF(MINUTE, LAG(c.clicked_at)
-		OVER ( PARTITION BY c.ip_hash, COALESCE(NULLIF(c.user_agent,''), 'NA')
-		ORDER BY c.clicked_at ), c.clicked_at ) IS NULL THEN 1 WHEN
-		TIMESTAMPDIFF(MINUTE, LAG(c.clicked_at) OVER ( PARTITION BY c.ip_hash,
-		COALESCE(NULLIF(c.user_agent,''), 'NA') ORDER BY c.clicked_at ),
-		c.clicked_at ) &gt;= #{winMin} THEN 1 ELSE 0 END AS session_start FROM
-		click_log c JOIN link l ON l.id = c.link_id WHERE l.slug = #{slug} <include
-			refid="TIME_RANGE" /> ) x WHERE session_start = 1 </select>
-
-
-	<!-- QR vs LINK 집계 (slug 기준) -->
-	<select id="qrVsLinkBySlug"
-		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT CASE
-		WHEN COALESCE(c.channel,'') LIKE 'QR:%' THEN 'QR' ELSE 'LINK' END AS
-		`key`, COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id = c.link_id
-		WHERE l.slug = #{slug} <include refid="TIME_RANGE" /> GROUP BY `key`
-		ORDER BY `key` </select>
-
-	<!-- QR 매체(중분류) TOP N: channel = 'QR:<medium>[:...]' -->
-	<select id="qrMediumBySlug"
-		resultType="org.example.dashboard.dto.ReferrerCountDTO"> SELECT --
-		'QR:poster:gateA' -> 'poster' SUBSTRING_INDEX(SUBSTRING_INDEX(c.channel,
-		':', 2), ':', -1) AS `key`, COUNT(*) AS cnt FROM click_log c JOIN link l
-		ON l.id = c.link_id WHERE l.slug = #{slug} AND COALESCE(c.channel,'')
-		LIKE 'QR:%' <include refid="TIME_RANGE" /> GROUP BY `key` ORDER BY cnt
-		DESC LIMIT #{limit} </select>
-
-
-	<!-- source 필터 동적 WHERE -->
-	<sql id="SOURCE_FILTER">
-		<if test="source == 'qr'">
-			AND COALESCE(c.channel,'') LIKE 'QR:%'
-		</if>
-		<if test="source == 'link'">
-			AND (c.channel IS NULL OR c.channel NOT LIKE 'QR:%')
-		</if>
-	</sql>
-
-	<!-- 시간 분포 -->
-	<select id="timeDistributionFiltered"
-		resultType="org.example.dashboard.dto.TimeBucketCountDTO"> SELECT <choose>
-			<when test="granularity == 'hour'">
-				HOUR(c.clicked_at) AS bucket
-			</when>
-			<when test="granularity == 'dow'">
-				DAYOFWEEK(c.clicked_at) AS bucket
-			</when>
-			<otherwise>
-				HOUR(c.clicked_at) AS bucket
-			</otherwise>
-		</choose>,
-		COUNT(*) AS cnt FROM click_log c JOIN link l ON l.id = c.link_id WHERE
-		l.slug = #{slug} <include refid="SOURCE_FILTER" />
-  <include
-			refid="TIME_RANGE" /> GROUP BY bucket ORDER BY bucket </select>
-
+  <select id="timeDistributionFiltered" resultType="org.example.dashboard.dto.TimeBucketCountDTO">
+    SELECT
+      <choose>
+        <when test="granularity == 'hour'"> HOUR(c.clicked_at) AS bucket </when>
+        <when test="granularity == 'dow'">  DAYOFWEEK(c.clicked_at) AS bucket </when>
+        <otherwise>                        HOUR(c.clicked_at) AS bucket </otherwise>
+      </choose>,
+      COUNT(*) AS cnt
+    FROM click_log c JOIN link l ON l.id = c.link_id
+    WHERE l.slug = #{slug}
+      <include refid="SOURCE_FILTER" />
+      <include refid="TIME_RANGE" />
+    GROUP BY bucket
+    ORDER BY bucket
+  </select>
 
 </mapper>

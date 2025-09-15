@@ -24,6 +24,12 @@ CREATE TABLE click_log (
 
 ALTER TABLE click_log
   ADD COLUMN country_code CHAR(2) NULL AFTER channel;
+  
+ALTER TABLE click_log
+  ADD COLUMN is_bot TINYINT(1) DEFAULT 0,
+  ADD COLUMN bot_type VARCHAR(32) NULL,         -- 'crawler' | 'preview' | 'healthcheck' | 'unknown'         -- CF-IPCountry 등
+  ADD COLUMN referrer_host VARCHAR(128) NULL;
+
 
   
   --- ######### ClickLogRepository 쿼리 순수 db용 --
