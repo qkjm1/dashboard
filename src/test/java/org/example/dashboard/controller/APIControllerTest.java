@@ -72,7 +72,7 @@ class APIControllerTest {
         linkStatsDTO.setTopReferrers(List.of());
 
         when(linkService.getLink("testSlug")).thenReturn(mockLink);
-        when(clickLogService.buildStatsDTO(mockLink.getId())).thenReturn(linkStatsDTO); // ✅ dto 타입으로 반환
+        when(clickLogService.buildStatsDTO(mockLink.getId())).thenReturn(linkStatsDTO);
 
         mockMvc.perform(get("/api/links/testSlug/stats"))
                 .andExpect(status().isOk())
