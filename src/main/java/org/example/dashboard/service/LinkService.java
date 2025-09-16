@@ -48,4 +48,22 @@ public class LinkService {
         }
         return sb.toString();
     }
+    
+    
+ // ClickLogService
+    Map<String, Object> botMetrics(String slug, LocalDateTime start, LocalDateTime end);
+    Map<String, Object> detectSpikes(String slug, String bucket, double z, LocalDateTime start, LocalDateTime end);
+
+    // LinkHealthService
+    Map<String, Object> findLatest(String slug);
+    List<Map<String, Object>> findRecent(String slug, int limit);
+    Map<String, Object> summary(String slug, LocalDateTime start, LocalDateTime end);
+
+    // LinkService
+    Map<String, Object> preExpiryTrend(String slug, int days);
+    List<Map<String, Object>> listByActive(boolean active, int limit);
+
+    // DashboardService
+    LinkFullInfoDTO summary(String slug, LocalDateTime start, LocalDateTime end, int limit);
+
 }

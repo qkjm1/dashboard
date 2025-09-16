@@ -266,6 +266,119 @@ public class APIController {
 		return clickLogService.scanDistribution(slug, source, granularity, start, end);
 	}
 
+	
+	
+	/*
+     * 봇 차단율/유형 집계
+     * GET /api/links/{slug}/bot-metrics?start=&end=
+     */
+    @GetMapping("/links/{slug}/bot-metrics")
+    public Map<String, Object> botMetrics(
+            @PathVariable String slug,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
+    ) {
+        requireActive(slug);
+        return clickLogService.botMetrics(slug, start, end);
+    }
+	
+    /*
+     * 스파이크(이상 급증) 감지 (버킷/임계값 파라미터)
+     * GET /api/links/{slug}/spikes?bucket=5m&z=3.0&start=&end=
+     */
+    @GetMapping("/links/{slug}/spikes")
+    public Map<String, Object> spikes(
+            @PathVariable String slug,
+            @RequestParam(defaultValue = "5m") String bucket,
+            @RequestParam(defaultValue = "3.0") double z,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
+    ) {
+        requireActive(slug);
+        return clickLogService.detectSpikes(slug, bucket, z, start, end);
+    }
+    
+    
+    
+    
+ // ---------------------------
+    // 링크 상태/운영 (헬스체크/만기)
+    // ---------------------------
+
+    /*
+     * 타깃 URL 최신 헬스체크
+     * GET /api/links/{slug}/health/latest
+     */
+    @GetMapping("/links/{slug}/health/latest")
+    public Map<String, Object> latestHealth(@PathVariable String slug) {
+        requireActive(slug);
+        return linkHealthService.findLatest(slug);
+    }
+    
+    
+    /*
+     * 타깃 URL 헬스체크 요약(기간)
+     * GET /api/links/{slug}/health/summary?start=&end=
+     */
+    @GetMapping("/links/{slug}/health/summary")
+    public Map<String, Object> healthSummary(
+            @PathVariable String slug,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
+    ) {
+        requireActive(slug);
+        return linkHealthService.summary(slug, start, end);
+    }
+    
+    
+    /*
+     * 타깃 URL 헬스체크 히스토리
+     * GET /api/links/{slug}/health/history?limit=20
+     */
+    @GetMapping("/links/{slug}/health/history")
+    public List<Map<String, Object>> healthHistory(
+            @PathVariable String slug,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        requireActive(slug);
+        return linkHealthService.findRecent(slug, limit);
+    }
+    
+    
+    /*
+     * 만료 임박 전 일별 추이 (D-n ~ D-1)
+     * GET /api/links/{slug}/pre-expiry-trend?days=7
+     */
+    @GetMapping("/links/{slug}/pre-expiry-trend")
+    public Map<String, Object> preExpiryTrend(
+            @PathVariable String slug,
+            @RequestParam(defaultValue = "7") int days
+    ) {
+        requireActive(slug);
+        return linkService.preExpiryTrend(slug, days);
+    }
+	
+    
+    
+    /*
+     * 링크 활성/비활성 목록
+     * GET /api/links/status?active=true&limit=50
+     */
+    @GetMapping("/links/status")
+    public List<Map<String, Object>> linkStatus(
+            @RequestParam(defaultValue = "true") boolean active,
+            @RequestParam(defaultValue = "50") int limit
+    ) {
+        return linkService.listByActive(active, limit);
+    }
+	
+	
 	/*
 	 * timeDistribution()에서 예외가 400으로 넘어가야 하는데 404로 넘어가버려서
 	 * 400(badRequest)로 보낼 수 있도록 이끌어주는 컨트롤러

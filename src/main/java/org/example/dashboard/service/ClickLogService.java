@@ -373,5 +373,10 @@ public class ClickLogService {
 			LocalDateTime start, LocalDateTime end) {
 		return clickLogRepository.timeDistributionFiltered(slug, source, granularity, start, end);
 	}
+	
+	public Map<String, Object> botMetrics(String slug, LocalDateTime start, LocalDateTime end);
+	
+	public Map<String, Object> detectSpikes(String slug, String bucket, double z, LocalDateTime start, LocalDateTime end);
+
 
 }

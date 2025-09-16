@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @Mapper
-public interface ClickLogRepository {
+public interface ClickLogRepository2 {
 
 	void insertClickLog(ClickLog clickLog);
 
@@ -89,4 +89,39 @@ public interface ClickLogRepository {
 																													// null
 			@Param("granularity") String granularity, // "hour" | "dow"
 			@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+	
+	
+	// --- Bot metrics ---
+	long countTotalBySlugAndTime(@Param("slug") String slug,
+	@Param("start") LocalDateTime start,
+	@Param("end") LocalDateTime end);
+
+
+	long countBlockedBySlugAndTime(@Param("slug") String slug,
+	@Param("start") LocalDateTime start,
+	@Param("end") LocalDateTime end);
+
+
+	List<Map<String, Object>> countByBotType(@Param("slug") String slug,
+	@Param("start") LocalDateTime start,
+	@Param("end") LocalDateTime end);
+
+
+	// --- Spikes detection helpers ---
+	List<Map<String, Object>> timeBucketCounts(@Param("slug") String slug,
+	@Param("bucketSeconds") int bucketSeconds,
+	@Param("start") LocalDateTime start,
+	@Param("end") LocalDateTime end);
+
+
+	List<Map<String, Object>> topReferrersBetween(@Param("slug") String slug,
+	@Param("start") LocalDateTime start,
+	@Param("end") LocalDateTime end,
+	@Param("limit") int limit);
+
+
+	// --- Pre-expiry trend ---
+	List<Map<String, Object>> dailyCountsBetween(@Param("slug") String slug,
+	@Param("start") LocalDateTime start,
+	@Param("end") LocalDateTime end);
 }

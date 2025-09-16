@@ -18,3 +18,5 @@ mybatis:
 logging:
   level:
     org.mybatis: DEBUG
+management.endpoints.web.exposure.include: health,info
+management.endpoints.web.base-path: /actuator
