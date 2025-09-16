@@ -40,7 +40,7 @@ public class LinkPerformanceConcurrentTest {
                             String body = createResponse.getBody();
                             String slug = body.split("\"slug\":\"")[1].split("\"")[0];
 
-                            // 2️⃣ 리다이렉트 요청
+                            // 리다이렉트 요청
                             ResponseEntity<String> redirectResponse = restTemplate.getForEntity(
                                     baseUrl + "/r/" + slug, String.class);
 
